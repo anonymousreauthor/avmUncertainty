@@ -16,11 +16,11 @@ Begin by installing the following two packages from github
 
 * avmUncertainty
 
-`devtools::install_github('anonreauthor/avmUncertainty')`
+`devtools::install_github('anonymousreauthor/avmUncertainty')`
 
 * kingCoData
 
-`devtools::install_github('anonreauthor/kingCoData')`
+`devtools::install_github('anonymousreauthor/kingCoData')`
 
 &nbsp; 
 
@@ -58,7 +58,7 @@ Open this project in RStudio. Note that you can reproduce without the RStudio ID
 
 &nbsp; 
 
-Log an issue at www.github.com/reanonauthor/avmUncertainty.
+Log an issue at www.github.com/anonymousreauthor/avmUncertainty.
 
 
 
