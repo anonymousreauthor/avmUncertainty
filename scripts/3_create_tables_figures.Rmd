@@ -1,0 +1,238 @@
+---
+title: "Paper_Tables_Figures"
+author: "RE Anon Author"
+date: "2/17/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r comment = FALSE, warning = FALSE, echo = FALSE, message = FALSE}
+  library(tidyverse)
+  library(avmUncertainty) 
+```
+
+```{r load_data, echo = FALSE}
+  setwd('..')
+  results <- readRDS(file.path(getwd(), 'results', 'summary_results.rds'))
+```
+
+```{r, echo = FALSE}
+ head_col <- '#c5e1fa'
+ row_col <- "#edf5fc"
+ stripe_col <- "gray!6"
+```
+
+## Data Summary
+
+```{r, echo = FALSE}
+
+results$data %>%
+  knitr::kable(., format = 'html') %>%
+   kableExtra::kable_styling(full_width = F, stripe_color = strip_col) %>%
+   kableExtra::row_spec(c(2,4,6,8,10, 12), background = row_col) %>%
+   kableExtra::row_spec(0, background = head_col)
+
+```
+
+## Accuracy Table - Standard Data
+
+```{r, echo = FALSE}
+
+ results$accr %>%
+  dplyr::filter(data_condition == 'standard') %>%
+  dplyr::select(Model = model_class, Sample = geography, MdAPE = mape, MdPE = mpe,
+                PE10 = pe10, PE30 = pe30) %>%
+  dplyr::mutate(Model = c(rep('Linear (OLS)', 2), rep('Non-Linear (RF)', 2)),
+                Sample = rep(c('Global', 'Local'), 2)) %>%
+  knitr::kable(., format = 'html') %>% 
+   kableExtra::kable_styling(full_width = F, stripe_color = stripe_col) %>%
+   kableExtra::row_spec(c(2,4), background = row_col) %>%
+   kableExtra::row_spec(0, background = head_col)
+
+```
+
+## Accuracy Table - Sentivity Test
+
+```{r, echo = FALSE}
+
+ results$accr %>%
+  dplyr::select(Model = model_class, Sample = geography, Data = data_condition, MdAPE = mape) %>%
+  tidyr::pivot_wider(names_from = 'Data', values_from = 'MdAPE') %>%
+  dplyr::select(Model, Sample, Filtered = filtered, Original = standard, Perturbed = perturbed) %>%
+  dplyr::mutate(Model = c(rep('Linear (OLS)', 2), rep('Non-Linear (RF)', 2)),
+                Sample = rep(c('Global', 'Local'), 2)) %>%
+  knitr::kable(., format = 'html') %>% 
+   kableExtra::kable_styling(full_width = F, stripe_color = stripe_col) %>%
+   kableExtra::row_spec(c(2,4), background = row_col) %>%
+   kableExtra::row_spec(0, background = head_col)
+
+
+```
+
+## Summarize of Calibration (Median Absolute Error)
+
+```{r, echo = FALSE}
+
+results$cal %>%
+  dplyr::filter(data_condition == 'standard') %>%
+  dplyr::group_by(model_class, geography, method) %>%
+  dplyr::summarize(MdAE = median(abs(error)))%>%
+  dplyr::ungroup() %>%
+  tidyr::pivot_wider(names_from = 'method', values_from = 'MdAE') %>%
+  dplyr::select(`Model Class` = model_class, Sample = geography, `Error-Based` = error,`Model-Based` = model) %>%
+    dplyr::mutate(`Model Class` = c(rep('Linear (OLS)', 2), rep('Non-Linear (RF)', 2)),
+                Sample = rep(c('Global', 'Local'), 2)) %>%
+  knitr::kable(., format = 'html') %>% 
+   kableExtra::kable_styling(full_width = F, stripe_color = stripe_col) %>%
+   kableExtra::row_spec(c(2,4), background = row_col) %>%
+   kableExtra::row_spec(0, background = head_col)
+
+```
+
+## Reliability Diagram
+
+```{r, echo = FALSE}
+
+results$cal %>%
+  dplyr::filter(data_condition == 'standard') %>%
+  dplyr::mutate(Sample = ifelse(geography == 'global', 'Global', 'Local'),
+                Method = ifelse(method == 'model', 'Model-Based', 'Error-Based'),
+                `Model Class` = ifelse(model_class == 'lm', 'Linear (OLS)', 'Non-Linear (RF)')) %>%
+  ggplot(.,
+    aes(x = interval, y = coverage, color = Method)) + 
+    geom_abline(intercept = 0, slope = 1, size = 1, linetype = 1, color = 'black') +
+    geom_line(size = 1) + 
+    scale_color_manual(values = c('blue', 'orange')) + 
+    xlab('\nConfidence Level') + 
+    ylab('Coverage\n') + 
+    labs(title = 'Reliability Diagram\n',
+         subtitle = 'Standard Data Sample\n') + 
+  facet_grid(Sample ~ `Model Class`) + 
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        legend.position = 'bottom')
+ 
+```
+
+## Efficiency by Method
+
+```{r, echo = FALSE}
+
+results$eff %>%
+  dplyr::filter(data_condition == 'standard') %>%
+  dplyr::mutate(Sample = ifelse(geography == 'global', 'Global', 'Local'),
+                Method = ifelse(method == 'model', 'Model-Based', 'Error-Based'),
+                `Model Class` = ifelse(model_class == 'lm', 'Linear (OLS)', 'Non-Linear (RF)')) %>%
+  ggplot(.,
+    aes(x = interval, y = median, color = Method)) + 
+    geom_line(size = 1) + 
+    scale_color_manual(values = c('blue', 'orange')) + 
+    xlab('\nConfidence Level') + 
+    ylab('Median Prediction Interval Width\n') + 
+    labs(title = 'Efficiency Comparison (of Uncertainty Method)\n',
+         subtitle = 'Standard Data Sample\n') + 
+  facet_grid(Sample ~ `Model Class`) + 
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        legend.position = 'bottom')
+ 
+```
+
+## Efficiency by Model Class
+
+```{r, echo = FALSE}
+
+results$eff %>%
+  dplyr::filter(data_condition == 'standard') %>%
+  dplyr::mutate(Sample = ifelse(geography == 'global', 'Global', 'Local'),
+                Method = ifelse(method == 'model', 'Model-Based', 'Error-Based'),
+                `Model Class` = ifelse(model_class == 'lm', 'Linear (OLS)', 'Non-Linear (RF)')) %>%
+  ggplot(.,
+    aes(x = interval, y = median, color = Method, linetype = `Model Class`)) + 
+    geom_line(size = 1) + 
+    scale_color_manual(values = c('blue', 'orange')) + 
+    xlab('\nConfidence Level') + 
+    ylab('Median Prediction Interval Width\n') + 
+    labs(title = 'Efficiency Comparison (of Model Class)\n',
+         subtitle = 'Standard Data Sample\n') + 
+  facet_grid(Sample ~ Method) + 
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        legend.position = 'bottom')
+ 
+```
+
+# Sensitivity
+
+## Calibration
+
+### Reliability Plot
+```{r, echo = FALSE}
+
+results$cal %>%
+  dplyr::mutate(Sample = ifelse(geography == 'global', 'Global', 'Local'),
+                Method = ifelse(method == 'model', 'Model-Based', 'Error-Based'),
+                Data = ifelse(data_condition == 'standard', 'Original', 
+                              ifelse(data_condition == 'perturbed', 'Perturbed', 'Filtered')),
+                `Model Class` = ifelse(model_class == 'lm', 'Linear (OLS)', 'Non-Linear (RF)')) %>%
+  ggplot(.,
+    aes(x = interval, y = coverage, color = Method, linetype = `Model Class`)) + 
+    geom_abline(intercept = 0, slope = 1, size = 1, linetype = 1, color = 'black') +
+    geom_line(size = 1) + 
+    scale_color_manual(values = c('blue', 'orange')) + 
+    xlab('\nConfidence Level') + 
+    ylab('Coverage\n') + 
+    labs(title = 'Reliability Diagram\n',
+         subtitle = 'Sensitivity Test\n') + 
+  facet_grid(Sample~Data) + 
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        legend.position = 'bottom')
+ 
+```
+
+### Summary Table
+
+```{r, echo = FALSE}
+results$cal %>%
+  dplyr::mutate(Sample = ifelse(geography == 'global', 'Global', 'Local'),
+                Method = ifelse(method == 'model', 'Model-Based', 'Error-Based'),
+                Data = ifelse(data_condition == 'standard', 'Original', 
+                              ifelse(data_condition == 'perturbed', 'Perturbed', 'Filtered')),
+                `Model Class` = ifelse(model_class == 'lm', 'Linear (OLS)', 'Non-Linear (RF)')) %>%
+  dplyr::group_by(`Model Class`, Method, Sample, Data) %>%
+  dplyr::summarize(MdAE = median(abs(error))) %>%
+  tidyr::pivot_wider(names_from = 'Data', values_from = 'MdAE') %>%
+  knitr::kable(., format = 'html') %>% 
+   kableExtra::kable_styling(full_width = F, stripe_color = stripe_col) %>%
+   kableExtra::row_spec(c(3,4,7,8), background = row_col) %>%
+   kableExtra::row_spec(0, background = head_col)
+  
+
+```
+
+## Efficiency
+
+```{r, echo = FALSE}
+
+results$eff %>%
+  dplyr::mutate(Sample = ifelse(geography == 'global', 'Global', 'Local'),
+                Method = ifelse(method == 'model', 'Model-Based', 'Error-Based'),
+                Data = ifelse(data_condition == 'standard', 'Original', 
+                              ifelse(data_condition == 'perturbed', 'Perturbed', 'Filtered')),
+                `Model Class` = ifelse(model_class == 'lm', 'Linear (OLS)', 'Non-Linear (RF)')) %>%
+  ggplot(.,
+    aes(x = interval, y = median, color = Method, linetype = `Model Class`)) + 
+    geom_line(size = 1) + 
+    scale_color_manual(values = c('blue', 'orange')) + 
+    xlab('\nConfidence Level') + 
+    ylab('Coverage\n') + 
+    labs(title = 'Efficiency Comparison\n',
+         subtitle = 'Sensitivity Test on Data Sample\n') + 
+  facet_grid(Sample~Data) + 
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        legend.position = 'bottom')
+ 
+```
