@@ -26,11 +26,11 @@ extractResults <- function(file_name,
 
   # Read in data
   cat('Reading in data from ', model_class, ' - ', geography, ' - ', data_condition, '\n')
-  raw_obj <- readRDS(file.path(getwd(), paste0(file_name, '.RDS')))
+  raw_obj <- readRDS(file.path(getwd(), 'results', paste0(file_name, '.RDS')))
 
   # Get Error Data
   error_df <- raw_obj$score$score %>%
-    dplyr::select(trans_id, pred, error = log_error) %>%
+    dplyr::select(trans_id, pred, error) %>%
     dplyr::mutate(model_class = model_class,
                   geography = geography,
                   data_condition = data_condition)
@@ -76,7 +76,6 @@ extractResults <- function(file_name,
        calibration = calibration_df,
        efficiency = efficiency_df,
        raw_intervals = raw_intervals)
-
 }
 
 #'
@@ -90,10 +89,11 @@ extractResults <- function(file_name,
 #' @return Raw intervals
 #' @export
 
-extractIntervals <- function(raw_obj, interval){
+extractIntervals <- function(raw_obj,
+                             interval){
 
-  lo_str = paste0('lo_0', interval)
-  hi_str = paste0('hi_0', interval)
+  lo_str = 'lo_0.90'
+  hi_str = 'hi_0.90'
 
   purrr::map2(.x = raw_obj$score$predintervals,
               .y = names(raw_obj$score$predintervals),

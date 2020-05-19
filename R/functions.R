@@ -40,11 +40,14 @@ timeAdjustData <- function(trans_df){
 
   # Join index values to transactios adjust to last period value
   hpi_index$data %>%
+    as.data.frame() %>%
+    dplyr::mutate(trans_period = as.integer(trans_period)) %>%
     dplyr::left_join(., index_df %>%
-                       dplyr::select(trans_period = sale_month, adj),
+                       dplyr::select(trans_period = sale_month, adj) %>%
+                       dplyr::mutate(trans_period = as.integer(trans_period),
+                                     adj = as.numeric(adj)),
                      by = 'trans_period') %>%
     dplyr::mutate(adj_price = price / adj)
-
 }
 
 #'
@@ -88,10 +91,10 @@ trimPriceQuantiles <- function(x_df,
                                lo_qtl,
                                hi_qtl){
 
-    lo <- quantile(x_df$sale_price, lo_qtl)
-    hi <- quantile(x_df$sale_price, hi_qtl)
-    x_df %>%
-      dplyr::filter(sale_price > lo & sale_price < hi)
+  lo <- quantile(x_df$sale_price, lo_qtl)
+  hi <- quantile(x_df$sale_price, hi_qtl)
+  x_df %>%
+    dplyr::filter(sale_price > lo & sale_price < hi)
 }
 
 # Train Models -------------------------------------------------------------------------------------
@@ -161,7 +164,7 @@ trainModel.lm <- function(train_df,
 #' @param mod_spec Model specification
 #' @param k [5] Number of folds
 #' @importFrom caret createFolds
-#' @importFrom dplyr bind_rows left_join
+#' @importFrom dplyr bind_rows
 #' @return Cross validation prediction
 #' @export
 
@@ -185,10 +188,8 @@ crossVal <- function(train_df,
     res_[[i]] <- data.frame(trans_id = train_df$trans_id[i_k],
                             cv_pred = predict(mod, train_df[i_k, ]))
     if (all(is.na(res_[[i]]$cv_pred))) res_[[i]] <- NULL
-    if (mean(res_[[i]]$cv_pred, na.rm = TRUE) < 100){
-      res_[[i]]$cv_pred <- exp(res_[[i]]$cv_pred)
-    }
   }
+
   train_df %>%
     dplyr::left_join(., res_ %>% dplyr::bind_rows(), by = 'trans_id')
 }
@@ -252,7 +253,7 @@ scoreModel <- function(mod_obj,
 
   if (all(is.na(point_df$pred))) return(NULL)
   test_df$pred <- point_df$pred[match(test_df$trans_id, point_df$trans_id)]
-  test_df$log_error <- log(test_df$pred) - log(test_df$price)
+  test_df$error <- test_df$pred - log(test_df$price)
 
   # Calc Errors
   mod_obj$data <- calculateErrors(mod_obj$data)
@@ -318,7 +319,6 @@ pointPrediction.lm <- function(mod_obj,
                   newdata = test_df)
 
   if (all(is.na(pred))) return(NULL)
-  if (median(pred, na.rm=TRUE) < 100) pred <- exp(pred)
   pred
 }
 
@@ -341,15 +341,13 @@ pointPrediction.rf <- function(mod_obj,
                              quantiles = .5)$predictions)
 
   if (all(is.na(pred))) return(NULL)
-  if (median(pred, na.rm=TRUE) < 100) pred <- exp(pred)
   pred
 }
 
 #'
 #' Calculate the prediction error on the test set
 #'
-#' @param test_df Data.frame of data to score
-#' @param point_df Data.frame with point prediction
+#' @param train_df Data.frame with point prediction
 #' @importFrom dplyr left_join mutate
 #' @return Test observation with prediction error
 #' @export
@@ -357,7 +355,7 @@ pointPrediction.rf <- function(mod_obj,
 calculateErrors <- function(train_df){
 
   train_df %>%
-    dplyr::mutate(log_error = log(cv_pred) - log(price))
+    dplyr::mutate(error = cv_pred - log(price))
 
 }
 
@@ -379,7 +377,7 @@ calculateFSD <- function(train_df,
 
   if (!'error' %in% pi_methods) return(NULL)
 
-  fsd <- stats::sd(train_df$log_error)
+  fsd <- stats::sd(train_df$error)
 
   # Get SD multipliers
   fsdintervals_ <- list()
@@ -409,11 +407,11 @@ calculateFSD <- function(train_df,
 #' @export
 
 scoreInterval <- function(pi_method,
-                            pred_intervals,
-                            test_df,
-                            mod_obj,
-                            fsd_obj = NULL,
-                            ...){
+                          pred_intervals,
+                          test_df,
+                          mod_obj,
+                          fsd_obj = NULL,
+                          ...){
 
   pi_method <- structure(pi_method, class = pi_method)
   UseMethod('scoreInterval', pi_method)
@@ -433,12 +431,12 @@ scoreInterval.error <- function(pi_method,
                                 fsd_obj = NULL,
                                 ...){
 
-  pi_df <- test_df[, c('trans_id', 'price', 'pred', 'log_error')]
+  pi_df <- test_df[, c('trans_id', 'price', 'pred', 'error')]
 
   for (k in 1:nrow(fsd_obj$intervals)) {
 
-    lo <- pi_df$pred - (pi_df$pred * fsd_obj$intervals$value[[k]])
-    hi <- pi_df$pred + (pi_df$pred * fsd_obj$intervals$value[[k]])
+    lo <- pi_df$pred - fsd_obj$intervals$value[[k]]
+    hi <- pi_df$pred + fsd_obj$intervals$value[[k]]
 
     pi_df[[paste0('lo_', format(fsd_obj$intervals$interval[k], nsmall = 2))]] <- lo
     pi_df[[paste0('hi_', format(fsd_obj$intervals$interval[k], nsmall = 2))]] <- hi
@@ -470,6 +468,95 @@ scoreInterval.model <- function(pi_method,
 }
 
 #'
+#' Score intervals with data method
+#'
+#' @method scoreInterval dissimilarity
+#' @inherit scoreInterval params
+#' @importFrom solitude isolationForest
+#' @importFrom purrr map2
+#' @importFrom dplyr bind_rows mutate
+#' @export
+
+scoreInterval.dissimilarity <- function(pi_method,
+                                        pred_intervals,
+                                        test_df,
+                                        mod_obj,
+                                        fsd_obj = NULL,
+                                        iso_fields = c('sqft', 'bath_full', 'beds','land_val'),
+                                        ...){
+
+  require(solitude)
+
+  # Train model (with train only)
+  set.seed(1)
+  iso_train <- mod_obj$data[, iso_fields]
+  iso_mod <- solitude::isolationForest$new(sample_size = min(256, nrow(iso_train - 10)))
+  suppressMessages(iso_mod$fit(iso_train))
+
+  # Score both Train and Test
+  suppressMessages(tiso_df <- iso_mod$predict(test_df[, iso_fields]))
+  suppressMessages(triso_df <- iso_mod$predict(mod_obj$data[, iso_fields]))
+
+  # Standardize depths (round to integer)
+  st_depths <- round(c(tiso_df$average_depth, triso_df$average_depth),  0)
+  st_depths <- 1 + (st_depths - min(st_depths))
+
+  # Fix cases with <5 at a given depth (<1 breaks the SD calcs)
+  depth_table <- table(st_depths)
+  mid <- length(depth_table) / 2
+  bad_table <- which(depth_table < 5)
+  if (any(bad_table < mid)){
+    low_bad <- bad_table[bad_table < mid]
+    st_depths[st_depths %in% as.numeric(names(low_bad))] <-
+      min(unique(st_depths)[!unique(st_depths) %in% as.numeric(names(low_bad))])
+  }
+  if (any(bad_table >= mid)){
+    high_bad <- bad_table[bad_table >= mid]
+    st_depths[st_depths %in% as.numeric(names(high_bad))] <-
+      max(unique(st_depths)[!unique(st_depths) %in% as.numeric(names(high_bad))])
+  }
+
+  # Rescale and split by use
+  st_depths <- 1 + (st_depths - min(st_depths))
+  tr_depths <- st_depths[-(1:nrow(test_df))]
+  te_depths <- st_depths[(1:nrow(test_df))]
+
+  # Calcualte FSD of error at each level
+
+  # Create Full depth dt
+  depth_df <- data.frame(depth = as.numeric(names(table(st_depths))))
+
+  trdepth_df <- data.frame(depth = as.numeric(names(table(tr_depths))),
+                           fsd = tapply(abs(mod_obj$data$error), tr_depths, sd))
+  depth_df <- depth_df %>%
+    dplyr::left_join(., trdepth_df, by = 'depth')
+
+  if (any(is.na(depth_df$fsd))){
+    nas <- which(is.na(depth_df$fsd))
+    for (i_na in nas){
+      id <- depth_df$depth[i_na]
+      nbrs <- abs(id - depth_df$depth)
+      xx <- which(!is.na(depth_df$fsd) & nbrs > 0)
+      xxp <- xx[which(nbrs[xx] == min(nbrs[xx]))]
+      depth_df$fsd[i_na] = median(depth_df$fsd[xxp])
+    }
+  }
+
+  fsds_ <- as.list(depth_df$fsd[depth_df$depth %in% as.numeric(names(table(te_depths)))])
+
+  # Apply error PIs based on depth level
+  tedepth_ <- split(test_df, te_depths)
+  purrr::map2(.x = tedepth_,
+              .y = fsds_,
+              .f = depthInterval,
+              intervals = pred_intervals,
+              ...) %>%
+    dplyr::bind_rows() %>%
+    dplyr::mutate(iso_depth = te_depths) %>%
+    structure(., class = c('dissimilarity', 'interval_df', 'tbl_df', 'tbl', 'data.frame'))
+}
+
+#'
 #' Calculate the depth-related intervals
 #'
 #' @param x_df Method to use for interval construction
@@ -482,7 +569,7 @@ scoreInterval.model <- function(pi_method,
 depthInterval <- function(x_df,
                           fsd,
                           intervals){
-  pi_df <- x_df[, c('trans_id', 'price', 'pred', 'log_error')]
+  pi_df <- x_df[, c('trans_id', 'price', 'pred', 'error')]
 
   # Get SD multipliers
   depthintervals_ <- list()
@@ -500,7 +587,7 @@ depthInterval <- function(x_df,
     pi_df[[paste0('lo_', format(intervals[k], nsmall = 2))]] <- lo
     pi_df[[paste0('hi_', format(intervals[k], nsmall = 2))]] <- hi
   }
- pi_df
+  pi_df
 }
 
 #'
@@ -545,7 +632,8 @@ rangePrediction.lm <- function(mod_obj,
                      ...)
 
   pi_pred <- as.data.frame(t(apply(boot_mat, 1, quantile,
-                                   c(pred_intervals / 2, .5 + pred_intervals / 2))))
+                                   c(sort(.5 - pred_intervals / 2),
+                                     .5 + pred_intervals / 2))))
 
   re_order <- c(length(pred_intervals):1, (1:length(pred_intervals) + .01))
   pi_pred <- pi_pred[, order(re_order)]
@@ -556,22 +644,15 @@ rangePrediction.lm <- function(mod_obj,
 
   pi_med <- median(pi_pred[[1]], na.rm = TRUE)
   if (is.na(pi_med)) return(NULL)
-  if (pi_med < 100) pi_pred <- exp(pi_pred)
 
   test_df %>%
-    dplyr::select(trans_id, price, pred, log_error) %>%
+    dplyr::select(trans_id, price, pred, error) %>%
     dplyr::left_join(., pi_pred %>%
                        dplyr::mutate(trans_id = test_df$trans_id), by = 'trans_id')
-
 }
 
 
 #'
-#' Make standardized residual adjustments
-#'
-#' @param lm_obj linear model object
-#' @importFrom stats residuals influence
-#' @return Adjusted residuals
 #' @export
 
 adjustResiduals <- function(lm_obj){
@@ -581,6 +662,27 @@ adjustResiduals <- function(lm_obj){
   resid_adj - mean(resid_adj, na.rm = FALSE)
 }
 
+#'
+#' Core bootstrap routine
+#' @param lm_obj Linear model object
+#' @param new_df Prediction data.frame
+#' @param boot_samples [100] Number of boot strap samples
+#' @importFrom caret createFolds
+#' @importFrom dplyr bind_rows left_join
+#' @return Cross validation prediction
+#' @export
+
+bootLM <- function(lm_obj,
+                   new_df,
+                   boot_samples = 100){
+
+  bs_ <- vector('list', length = boot_samples)
+  for (i in 1:boot_samples){
+    bs_[[i]] <- bootLMEngine(lm_obj, new_df, seed = i)
+    # bs_[[i]] <- bootLMEngine(df, mod_spec, new_df, seed = i)
+  }
+  unlist(bs_) %>% matrix(., ncol=boot_samples)
+}
 
 #'
 #' Controls the bootstrapping
@@ -617,34 +719,14 @@ bootLMEngine <- function(lm_obj,
     ix <- grep('as.factor', names(boot_df))
     names(boot_df)[ix] <- 'trans_period'
   }
+
   lm_boot <- lm(as.formula(lm_obj, env = environment()), data = boot_df)
 
   # Create bootstrapped adjusted residuals
   boot_resid_adj <- adjustResiduals(lm_boot)
 
-  predict(lm_boot, newdata = new_df) + sample(boot_resid_adj,
-                                              size = nrow(new_df), replace = TRUE)
-}
-
-#'
-#' Core bootstrap routine
-#' @param lm_obj Linear model object
-#' @param new_df Prediction data.frame
-#' @param boot_samples [100] Number of boot strap samples
-#' @importFrom caret createFolds
-#' @importFrom dplyr bind_rows left_join
-#' @return Cross validation prediction
-#' @export
-
-bootLM <- function(lm_obj,
-                   new_df,
-                   boot_samples = 100){
-
-  bs_ <- vector('list', length = boot_samples)
-  for (i in 1:boot_samples){
-    bs_[[i]] <- bootLMEngine(lm_obj, new_df, seed = i)
-  }
-  unlist(bs_) %>% matrix(., ncol=boot_samples)
+  predict(lm_boot, newdata = new_df) + sample(boot_resid_adj, size = nrow(new_df),
+                                              replace = TRUE)
 }
 
 #'
@@ -664,7 +746,8 @@ rangePrediction.rf <- function(mod_obj,
   pi_pred <- predict(mod_obj$full,
                      data = test_df,
                      type = 'quantiles',
-                     quantiles = c(pred_intervals / 2, .5 + pred_intervals / 2))$predictions
+                     quantiles =  c(sort(.5 - pred_intervals / 2),
+                                    .5 + pred_intervals / 2))$predictions
 
   # Re order columns to be in order of intervals and convert to a data.frame
   re_order <- c(length(pred_intervals):1, (1:length(pred_intervals) + .01))
@@ -675,7 +758,7 @@ rangePrediction.rf <- function(mod_obj,
                            sort(rep(format(pred_intervals, nsmall = 2), 2)))
 
   test_df %>%
-    dplyr::select(trans_id, price, pred, log_error) %>%
+    dplyr::select(trans_id, price, pred, error) %>%
     dplyr::left_join(., pi_pred %>%
                        dplyr::mutate(trans_id = test_df$trans_id), by = 'trans_id')
 }
@@ -699,7 +782,7 @@ calibrateModel <- function(scored_obj){
                         .f = checkPredIntervals)
 
   accr_ <- purrr::map(.x = within_,
-                       .f = calibEngine)
+                      .f = calibEngine)
 
   effic_ <- purrr::map(.x = scored_obj$predintervals,
                        .f = calibEfficiency,
@@ -707,7 +790,7 @@ calibrateModel <- function(scored_obj){
 
   list(prediction = predaccr_df,
        accr_summ = purrr::map(.x = accr_,
-                             .f = function(x) x$summary) %>%
+                              .f = function(x) x$summary) %>%
          dplyr::bind_rows() %>%
          dplyr::mutate(method = names(scored_obj$predintervals)),
        accuracy = accr_,
@@ -733,7 +816,7 @@ calibEfficiency <- function(interval_df,
     int_df <- interval_df[,grep(k, names(interval_df))]
     names(int_df) <- c('lo', 'hi')
     int_df$range <- as.numeric(int_df$hi - int_df$lo)
-    effic_df[[paste0('range_', k)]] <- as.numeric(int_df$range/effic_df$pred)
+    effic_df[[paste0('range_', k)]] <- int_df$range
   }
 
   effic_df %>%
@@ -742,8 +825,6 @@ calibEfficiency <- function(interval_df,
     dplyr::summarize(mean = mean(efficiency, na.rm=TRUE),
                      median = median(efficiency, na.rm=TRUE)) %>%
     dplyr::mutate(interval = intervals)
-
-
 }
 
 #'
@@ -758,15 +839,14 @@ calibEfficiency <- function(interval_df,
 
 calculateAccuracy <- function(score_df){
 
-  data.frame(mape = median(abs(score_df$log_error)),
-             mpe = median(score_df$log_error),
-             aape = mean(abs(score_df$log_error)),
-             ape = mean(score_df$log_error),
-             pe10 = sum(abs(score_df$log_error) <= .10) / nrow(score_df),
-             pe20 = sum(abs(score_df$log_error) <= .20) / nrow(score_df),
-             pe30 = sum(abs(score_df$log_error) <= .30) / nrow(score_df))
+  data.frame(mape = median(abs(score_df$error)),
+             mpe = median(score_df$error),
+             aape = mean(abs(score_df$error)),
+             ape = mean(score_df$error),
+             pe10 = sum(abs(score_df$error) <= .10) / nrow(score_df),
+             pe20 = sum(abs(score_df$error) <= .20) / nrow(score_df),
+             pe30 = sum(abs(score_df$error) <= .30) / nrow(score_df))
 }
-
 
 #'
 #' Determine whether or not predictions are within the PI
@@ -791,8 +871,8 @@ checkPredIntervals <- function(interval_df){
 
   # Check if actual sale price falls above and below ranges
   for (k in 1:ncol(lo_df)){
-    lo_df[k] <- ifelse(lo_df[,k] <= interval_df$price, 1, 0)
-    hi_df[k] <- ifelse(hi_df[,k] >= interval_df$price, 1, 0)
+    lo_df[k] <- ifelse(lo_df[,k] <= log(interval_df$price), 1, 0)
+    hi_df[k] <- ifelse(hi_df[,k] >= log(interval_df$price), 1, 0)
   }
 
   # Determine which are in the range (both > lo and < hi)
@@ -803,7 +883,7 @@ checkPredIntervals <- function(interval_df){
 
   # Return data.frame with calibration yes/nos
   structure(cbind(interval_df %>%
-                    dplyr::select(trans_id, price, pred, log_error),
+                    dplyr::select(trans_id, price, pred, error),
                   within_df),
             class = c('within', 'data.frame'))
 }

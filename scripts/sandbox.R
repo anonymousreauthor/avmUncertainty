@@ -54,7 +54,8 @@
    ## Score Models
 
    lm_score <- scoreModel(mod_obj = lm_model,
-                          test_df = data_$test)
+                          test_df = data_$test,
+                          pred_intervals = c(.5, .68, .80, .95))
 
   ## Calibration Models
 

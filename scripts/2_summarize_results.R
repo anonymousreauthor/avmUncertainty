@@ -9,6 +9,7 @@
   ## Load Libraries
 
   library(tidyverse)
+  library(moments)
   library(avmUncertainty)
   library(kingCoData)
 
@@ -30,6 +31,11 @@
   error_obj <-purrr::map(.x = summ_obj,
                        .f = function(x) x$accuracy) %>%
     dplyr::bind_rows()
+
+  ## Kurtosis table
+  kurt_tbl <- error_obj %>%
+    dplyr::group_by(model_class, geography, data_condition) %>%
+    dplyr::summarize(kurt = moments::kurtosis(error))
 
   ## Summarize down as raw is too big for RMD
   acc_tbl <-
@@ -68,7 +74,18 @@
     dplyr::mutate(baths = bath_full + (.75 * bath_3qtr) + (.5 * bath_half),
                   view_score = view_rainier + view_olympics + view_cascades + view_territorial +
                     view_skyline + view_sound + view_lakewash + view_lakesamm,
-                  wfnt = ifelse(wfnt == 0, 0, 1))
+                  wfnt = ifelse(wfnt == 0, 0, 1),
+                  townhome = ifelse(present_use == 29, 1, 0))
+
+  # Remove obvious bad homes
+  sales_df <- sales_df %>%
+    dplyr::filter(sqft > 400 &
+                    baths > 0 &
+                    beds > 0 &
+                    beds < 33 &
+                    sqft_1 <= sqft_lot &
+                    year_built <= lubridate::year(sale_date))
+  bad_count <- full_count - nrow(sales_df)
 
   summ_df <-
     sales_df %>%
@@ -89,10 +106,11 @@
 
 ### Write_out -----------------------------------------------------------------------------
 
- results_ <- list(accr = acc_tbl,
-                  cal = cal_obj,
-                  eff = eff_obj,
-                  data = summ_df)
+  results_ <- list(accr = acc_tbl,
+                   kurtosis = kurt_tbl,
+                   cal = cal_obj,
+                   eff = eff_obj,
+                   data = summ_df)
 
  saveRDS(results_, file.path(getwd(), paste0('summary_results.RDS')))
 
