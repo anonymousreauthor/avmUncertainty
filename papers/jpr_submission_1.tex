@@ -1,0 +1,810 @@
+%% filename: format.cls class
+\documentclass[colTwo]{format}
+
+%%%%%%%%%%%%%%
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{conjecture}{Conjecture}
+\newtheorem{question}{Question}
+\newtheorem{problem}{Problem}
+\newtheorem{corollary}{Corollary}
+\newtheorem{observation}{Observation}
+\newtheorem{example}{Example}
+\newtheorem{proposition}{Proposition}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+
+\begin{document}
+\titlerunning{Uncertainty in Automated Valuation Models}
+\authorrunning{KRAUSE, MARTIN, AND FIX}
+\doi{10.zillow/soon}
+
+\title{Uncertainty in Automated Valuation Models}
+
+\subtitle{An exploration of approaches} 
+ 	
+\author{Andy Krause\affilnum{1}, Andrew Martin\affilnum{2}, and Matthew Fix\affilnum{3}}
+
+\affiliation{\affilnum{1} Zillow Group, USA. andykr@zillowgroup.com\\
+\affilnum{2} Zillow Group, USA. andyma@zillowgroup.com \\
+\affilnum{3} Zillow Group, USA. matthewf@zillowgroup.com}
+
+\Howtocite{Krause, A., Martin, A., and Fix, M. (2020). Uncertainty in Automated Valuation Models. Forthcoming}
+
+%%%%%%%%creativecommons.org/licenses
+\CCbY
+%%%%%%%
+
+\begin{abstracts}
+\begin{abstract}
+Point estimates from Automated Valuation Models (AVMs) represent the most likely value from a distribution of possible values. The uncertainty in the point estimate -- the width of the range of possible values at a given level of confidence -- is a critical piece of the AVM output, especially in collateral and transactional situations. Estimating AVM uncertainty, however, remains highly unstandardised in both terminology and methods. In this paper we present and compare two of the most common approaches to estimating AVM uncertainty -- model-based and error-based prediction intervals. We also present a uniform language and framework for evaluating the calibration and efficiency of uncertainty estimates. Based on empirical tests of the various approaches on a large, longitudinal dataset of home sales, we show that model-based approaches outperform error-based ones with the differences being conditioned on model-class and geographic segmentation decisions. 
+
+\keywords{AVMs, uncertainty, prediction intervals, calibration}
+\end{abstract}
+
+%\textbf{Received:} January \_th 20xx\\
+%\textbf{Accepted:} January \_th 20xx
+\end{abstracts}
+
+\maketitle
+ 
+\section{Introduction}
+All predictions or estimates have an inherent uncertainty to them; valuations of real property are no exception. Despite this, traditional real estate valuations practices -- the manual valuations done by appraisers, valuers and surveyors -- often report a single value with no notion or acknowledgement of the uncertainty of that value (French and Gabrielli 2005).  This may be driven by a number of causes such as lender requirements to provide a single point estimate only, difficulty in formulating uncertainty estimates from small sample valuation methods or valuers' belief that their estimate is the exact value and has no uncertainty.  Regardless of the reason, the reporting of a single value has been the standard for decades and the industries surrounding real property valuation have become accustomed to this approach.  
+
+This is, perhaps, the most curious tradition or custom in the real property valuation space.  For many users of valuation estimates there is considerable financial risk being undertaken based on the value estimate.  Possessing some idea of how certain that value is would be useful in negotiations, insuring and general risk avoidance measures that parties to a real property transaction may look to undertake (Bellotti 2017).  Yet, reporting of uncertainty remains an afterthought in the traditional real property valuation methods.  
+
+With the advent and steady incorporation of statistical methods and, more recently, full automated valuation models (AVMs) into valuation practice, uncertainty is now much more easily, and likely more accurately, estimated. In fact, the ability to quantify uncertainty is one of the defining improvements that AVMs offer over traditional approaches (Mortgage Bankers Association 2019). Unfortunately, no standard on how to generate and report the uncertainty of real estate value estimates has arisen.  The diversity in the output from current AVM producers makes it difficult for users of valuations that do provide measures of uncertainty to both fully understand what these estimates mean and to compare between outputs from different providers/valuations.  In short, confusion around and/or lack of uncertainty estimates represents an information loss in regards to the potential risk involved in real estate transactions that rely on value estimates.      
+
+In this paper we profile and compare the various methods used to generate uncertainty estimates from automated valuation models (see Table 1). Focusing on prediction intervals, we test for the most reliable approach to measuring and reporting uncertainty.  Reliability is defined as the calibration and efficiency of the prediction intervals (Shafer and Vovk 2008; Leathert and Polaczuk 2020), both quantitatively measured as well as visualised with reliability diagrams (Degroot and Feinberg 1983; Murphy and Winkler 1987; Brocker and Smith 2007).  Our empirical tests use a deep, longitudinal dataset from the Seattle Metropolitan Area (Washington, USA) to compare prediction intervals derived from error- and model-based approaches. 
+
+Our findings suggest that model-based approaches to generating uncertainty estimates in the form of prediction intervals are better calibrated than those from an error-based approach. Error prediction intervals tend to be too conservative (too wide).  These general findings hold across comparisons from linear and non-linear models and for models estimated county-wide versus those with smaller samples (submarket level).   A set of sensitivity tests replicates the initial tests on two materially different sets of data, one filtered to the sales near the middle of the price distribution (‘cleaner’) and one with perturbed response variables created by adding artificial error to the sale price (‘dirtier’).  Both tests show very similar qualitative and quantitative findings, speaking to the robustness of our original results.  While much of the literature around AVM uncertainty methods suggests that prediction intervals (and by relation, FSDs) should be derived directly from known error distributions, the findings in this paper suggest that model-based approaches instead produce more calibrated measures of value uncertainty, regardless of the level of confidence desired.  
+
+\subsection{Terminology}
+
+In general, the terminology around the concept of uncertainty in property valuation, the methods to produce estimates of it, how these measures are reported and the approaches to evaluating the quality of uncertainty metrics is poorly standardised.  Except where purposefully pointing out differences in terms or directly quoting or paraphrasing from existing work, we use the following terms as:
+
+\begin{itemize}
+\item Uncertainty: General concept representing the fact that valuations (all predictions) have a distribution of possible or likely values.  It is intended to represent the concept itself, not the measurement thereof. Includes both aleatoric and epistemic uncertainty.
+  \begin{itemize}
+    \item Aleatoric uncertainty: Caused by stochastic variation in measurement or modeling (Hu et al 2020).
+    \item Epistemic uncertainty: Caused by missing information or knowledge about some component of the data generating process (Li et al 2014).
+  \end{itemize}
+\item Risk: Direct measure of the potential losses due to a decision or event.
+\item Uncertainty Estimate: A measure of uncertainty of an estimate. Commonly, this is an FSD, a prediction interval, or a confidence score. Uncertainty Estimates should be comparable across predictions and give model users indication of when an estimate is expected have lower uncertainty than another estimate.
+\item Prediction interval: A pair of low and high values (a range) bounding the point estimate. Together with a confidence level, a prediction interval gives exact probabilistic statements about how often subsequent observations are to fall inside the interval.
+\item Confidence Level (or Level of Confidence): A number from 0\% to 100\% giving a probability for some statement about the uncertainty estimate.
+\item Uncertainty Calibration: A measure of how well the probability statement from a set of uncertainty estimates matches a target probability on an out-of-sample validation set. Allows probability statements to, on aggregate, be falsifiable.
+\item Capture Percentage: The percentage of validation points (ground truth observations) falling within the prediction interval. The metric is only meaningful when measured out of sample and in aggregate. 
+\end{itemize}
+
+Terms within AVM Industry:
+
+\begin{itemize}
+\item Confidence Score: A value produced by AVM providers indicating a measure of their internal confidence in their point estimate value.  Maybe a numeric or relative measure. 
+\item Forecast Standard Deviation:  The standard deviation of the likely prediction errors, a measure of accuracy.  Typically assumes symmetry and normality of errors. Often reported as a percentage of the AVM value
+Prediction Error: Difference between the point estimate and the actual observed sale price.
+\item Accuracy: Ability of the model to produce estimates with low prediction error.  This has two components, bias and dispersion
+\item Bias: Closeness to 0 of the central tendency of the prediction errors.  An unbiased model over-values as much as it under-values.  
+\item Dispersion: The width of the prediction errors.  A tight dispersion means small errors with many predictions near the eventual sale price, a wide dispersion suggests the opposite.  May be measured a number of ways, including but not limited to: median absolute percentage error, mean absolute percent error, percent of errors within X\%
+\end{itemize}
+
+
+\begin{table*}[h!]
+\centering
+\begin{tabular}{|p{2.4cm} | p{3.99cm} | p{3.99cm} | p{3.99cm} |} 
+ \hline
+  & \textbf{Prediction Interval} & \textbf{Forecast Standard Deviation} & \textbf{Confidence Scores} \\ [0.5ex] 
+ \hline\hline
+ Reported Format & Interval and a confidence level & Numeric value, typically reported as a percentage of the home value estimate & Varied formats. Often Reported as a letter grade A-F \\ \hline
+ Uncertainty Estimate Example & A 90\% prediction interval is \$175,000 to \$210,000 & FSD = 0.3 & B \\
+ \hline
+Confidence Level Interpretation Example & There is a 90\% chance that if this home sells it will sell within the specified range. & There is a ~68\% chance that if this home sells, it will sell for +- 30\% the estimated value & None \\
+\hline
+Uncertainty Calibration
+(aggregate measure) & The percentage of out-of-sample validation points falling inside the interval. Target 90\% coverage & The percentage of out-of-sample validation points falling within 1 SD, 2SD, etc. Approximate targets correspond to the standard normal distribution coverage & None \\
+\hline
+ Uncertainty Efficiency
+(aggregate measure)
+ & The typical width of an interval & Varied. May be the typical width of the implied intervals for a particular target coverage or the percentage of estimates below some threshold & The share of estimates receiving each grade \\ [1ex] 
+ \hline
+\end{tabular}
+\caption{Examples of Uncertainty Estimates}
+\label{table:1}
+\end{table*}
+
+\section{Literature Review}
+
+A key defining feature of algorithmically-driven predictions -- be it of house values, the weather or medical diagnoses -- is the ability to produce estimates of uncertainty (Ghahramani 2015, Scher and Messori 2018).  A forecast of sunny and 28 degrees with high certainty of clear skies versus the same forecast with high uncertainty of the chance of rain will likely mean a different choice of clothing, or at the very least opting to bring an umbrella.  Likewise, high certainty around a house price estimate may create greater leverage in negotiations and/or a much quicker and easier financing process as opposed to a situation where the value is highly uncertain.  In short, the point estimate prediction may often grab the headline, but the extent of uncertainty should inform decisions and prescribe policy.   
+
+The literature on AVMs and statistical real property valuation more generally is spread broadly across three different forms of publications: 1) regulatory standards, guidelines and policy papers; 2) traditional academic research, and; 3) industry whitepapers.  Among these various sources, discussions of uncertainty vary widely.  With the numerous players practicing property valuation together with their divergent use cases for valuations, the lack of unified thinking around uncertainty is not surprising.  We begin this literature review by gathering the diversity of positions.  This, then, serves as the input for our efforts to develop a taxonomy of methods for deriving uncertainty estimates in the latter half.     
+
+\subsection{Regulatory Standards}
+
+Regulatory standards in the AVM space break down generally into two sectors -- those for tax assessment and those for collateral valuation (mortgage lending).  Overall, the tax assessment sector has a more unified and consistent set of standards.  Driven by the International Association of Assessing Officers (IAAO), the assessment community shares a common set of up-to-date and well documented guidelines that cover nearly all aspects of tax assessment in considerable detail.  
+
+Noticeably absent, however, from this corpus of standards (IAAO 2017; IAAO 2018) are concrete guidelines on reporting valuation uncertainty.  The IAAO’s Standard on Automated Valuation Models (IAAO 2018) does provide discussion around confidence intervals (and uncertainty in general) for aggregated metrics such as the Coefficient of Variation (COV), but does not directly address uncertainty of any singular property value estimate.  Perhaps this omission is intentional.  Property taxes are based on point estimates and taxpayers may care little about value ranges and uncertainty in general.  However, internally, the valuers and modelers tasked with producing accurate value assessments would benefit greatly from increased understanding of their own model performance in regards to the certainty of their estimates.		
+
+On the collateral valuation side, there are traditional valuers (appraisers) and the AVM producers. For traditional valuation and appraisal practice, the Royal Institute of Chartered Surveyors’ (RICS) Valuation Global Standards (2017) and the Appraisal Institute’s Uniform Standards of Professional Appraisal (USPAP) (2018) are the two voluminous and guiding documents. USPAP has two specific sections dedicated to mass appraisal, neither of which discuss the possibility of anything but point estimates. USPAP does often make reference to the requirement that mass appraisal of properties should be done under ‘recognised testing procedures’ but does not specify what those might or provide a reference thereto. The RICS Standards themselves do not address uncertainty either, however, it is mentioned in the International Valuation Standards (IVS) (2020) referenced by RICS (2017).  The main IVS standards make passing mention of valuation uncertainty (p. 117) pointing to the market, the model or input data as its source.  
+
+The International Valuation Standards Council (IVSC), producer of the IVS document, did, however, release a technical report on valuation uncertainty in 2013 (IVSC 2013). In this, important issues on uncertainty are covered. This technical report is, in some part, a response to calls for a more uniform approach to the measurement and communication of uncertainty as requested by working reports from groups led by Mallison (1994) and Carsberg (2001).  Both group reports were commissioned at the request of RICS (French and Gabrielli 2004). 
+
+In the IVSC technical report uncertainty is defined and categorised.  Market forces, model processes and input variables are all identified as drivers of uncertainty in valuation. Market uncertainty is completely exogenous to the valuation process and, while potentially large, is considered beyond the purview of the valuer.   Uncertainty from the modeling process is defined as the differences in value estimates resulting from using multiple models or approaches to create a value estimate.  Finally, input uncertainty is due to the potential for inputs to be variable.  Examples include using summary statistics, market adjustments or other modeled outputs as inputs into a valuation model.  
+
+Additionally, the IVSC (2013) offers guidance on the reporting of uncertainty.  First and foremost the materiality of the uncertainty must be determined.  Materiality in this case has two conditions: 1) The economic significance of the uncertainty; and 2) The necessity or desirability of information about uncertainty to user and/or use case.  If both conditions are not satisfied, then uncertainty need not be reported.  Interestingly, the IVSC recommends against providing ranges of values or prediction intervals to quantitatively represent uncertainty due to the likelihood of users not properly understanding and/or using these ranges to make decisions.  They suggest, instead, that qualitative and descriptive explanations of uncertainty are preferable.  
+
+Official and binding standards, while common place in traditional valuation and appraisal industry, are not found in the Automated Valuation Modeling (AVM) industry.  In Europe, the European AVM Alliance (EAA) acts as a trade organization that produces guidelines on best practice.  Within the United States, the Collateral Assessment Technology Committee (CATC) was formed in the aftermath of the global financial crisis to provide oversight on technological advances in collateral valuation techniques. It has, however, since been disbanded.  The closest thing to a replacement is the Mortgage Bankers Association (MBA) which isn’t solely AVM-focused, but does weigh in on mass valuation-related topics.  
+
+A report from the CATC (2009) offers a wide range of observations and suggestions for AVM practice, but is limited in its treatment of uncertainty.  Both a confidence score and a value range (prediction interval) are recognised as standard AVM outputs, but only the confidence scores are considered mandatory.  Within this report it is noted that confidence score creation is not standardised across the industry, but abstains from calling for a centralised approach.  The CATC does recommend that there should be a correlation between confidence scores and actual model performance (prediction errors), but details and examples are not provided. 
+
+The EAA recently released an updated, though not binding, set of standards (EAA 2019). In this, they stress the importance of agreement between measure of confidence (uncertainty) and observed prediction errors, echoing CATC’s recommendations.  While they recognise that some models may produce property-specific prediction intervals while others do not, there are no details around how these intervals are produced and/or how they should be reported.  Interestingly, value ranges are presented as a separate topic and it is implied that these should be driven by forecast standard deviations (FSDs).  AVM providers are further encouraged to provide detailed documentation on how confidence scores and FSDs are related.  
+
+Like both the CATC and the EAA, the Mortgage Bankers Association’s (MBA) most recent report (2019) on the current state of AVMs recommends that confidence measures are correlated with observed model accuracy.  The MBA goes a step further by defining confidence scores as ‘a measure of expected reliability’ and by noting that they should be based on prior testing of the model performance -- the errors of previous model runs.  This prescriptive advice differs from the model- and input-based measured suggested by the IVSC.  The differences between these approaches to measuring uncertainty are explored further in the subsequent sections of this paper.
+
+\subsection{Academic Research}
+
+The volume of academic research into property valuation modeling and analysis is immense.  This work can be broadly categorised into three forms: 1) Conceptual discussion of valuation methods and issues; 2) Research into the predictive accuracy of given valuation methods (often in a comparative sense); and  3) Research into the impact of a given variable(s) or feature(s) on price and/or rent.  The latter -- and likely larger (Knight et al 1992) -- corpus of the three are highly concerned with the concept of uncertainty, but almost exclusively in the context of statistical parameter estimate uncertainty for their chosen variable(s) of interest. We ignore this body of research in this work. 
+
+We begin by reviewing the conceptual discussion of uncertainty in valuation broadly.  Following this, we sample the set of comparative performance literature -- the second category above -- to measure how frequently uncertainty, often expressed as valuation ranges, are used as a performance criteria. It should be noted that some research has both feature impact (category 3) and performance criteria goals; so long as there is a focus on predictive accuracy we consider it in our review below. 
+
+\subsubsection{Conceptual Work}
+
+Some of the earliest thinking about uncertainty in academic real estate valuation research was catalyzed by the RICS-funded Mallinson Report (1994).  This early work primarily focused on defining terms and laying out the rationale for uncertainty in property valuation (Mallinson and French 2000, French and Gabrielli 2004).
+
+Uncertainty can be divided into abnormal and normal uncertainty.  Abnormal uncertainty derives from unique conditions of the property or the local market that inhibit the valuer from providing a valuation with a normal level of confidence (Mallinson and French 2000).  This form of uncertainty is rare; present only for a limited number of valuation cases.  Conversely, normal uncertainty is ubiquitous.  It arises from possible variations around valuation model inputs -- such as measurement errors and summary statistics -- as well as from the level of current market activity and the inherent lack of clarity around future market conditions (French and Gabriell 2004). These measures of uncertainty are contrasted against the concept of risk, which is defined as a direct measure of the potential loss due to a decision or event.  Another way to cast this distinction is that uncertainty is the inherent imprecision in making an estimate, risk is what one party stands to lose as a result of this imprecision (Kucharska-Stasiak 2013).  The valuation profession -- as impartial measurers of value(s) -- are almost exclusively concerned with uncertainty and not risk.
+
+Of the two forms of uncertainty, abnormal and normal, the normal type is the most actionable in terms of effective measurement.  Mallinson and French (2000) suggest simply referring to ‘normal uncertainty’ as ‘uncertainty’; a simplification we adopt.  A probabilistic framework for thinking about the uncertainty of valuation inputs and market behavior is central to the early examples of measuring and reporting.  
+
+A series of papers by French and Gabrielli (2004, 2005, and 2006) present a progression of work on valuation uncertainty from conceptual to applied. They begin (2004) with broadly discussing best practice for the reporting of uncertainty along with recommendations on thinking about possible distributional assumptions for model inputs. Next (2005), this advice is put into practice on a discounted cash flow (income) approach to value, highlighting the use of simulation -- using the Crystal Ball software -- to generate alternative scenarios and, ultimately a range of values.  Finally, they apply these concepts and methods to a land valuation case study in Italy (2006) to fully illustrate their approach in practice. 
+
+Additional conceptual work on valuation uncertainty is limited.  Meszek (2013) extends the work of French and Gabrielli (2005) using Crystal Ball by adding in a game theory component to supplement uncertainty measures obtained solely by simulation.  Directly related to AVMs, Lipscomb (2017) argues for the usefulness of deriving single estimate prediction intervals via a bootstrapping approach, however, no details or examples are provided. 
+
+The initial conceptual and applied research focuses heavily on the context of a single valuation; French and Gabrielli (2005; 2006) in a commercial real estate framework and Meszek (2013) in a purely hypothetical one. While these efforts set a solid foundation for thinking about uncertainty in practice, looking only at a single valuation does not allow for those measures of uncertainty to be validated. 
+
+\subsubsection{Uncertainty Calibration}
+
+The industry guidelines from the EAA, MBA, CATC and others all agree that confidence estimates should ‘correlate’ with actual model performance.  To test for this form of correlation or agreement, multiple valuations need to be analyzed.  Automated Valuation Models (AVMs) present an ideal use case for exploring the agreement between reported uncertainty and actual results.  
+
+Bolletti (2017) offers the first substantial test of uncertainty calibration in an AVM context.  Borrowing from the Conformal Predictions (CP) literature (Shafer and Vovk 2008), Bolletti conducts a test of the relationship between uncertainty measures and model predictions. The CP approach uses two metrics to measure calibration, or the agreement of uncertainty measures with model performance: 1) Validity and 2) Efficiency.  As an example, if a model provides 80\% prediction intervals (reported uncertainty) and 80\% of the ultimate values (sale prices) fall within these ranges then the uncertainty measures are valid.  If only 75\% do, then it is not valid. Within the CP framework, Validity is a binary measure.  If the coverage meets or exceeds the confidence level it is valid, if not it is invalid. The overall width of the intervals is referred to as Efficiency.  All else equal, smaller intervals are more informative or efficient than larger ones.  We more fully discuss the conformal predictors approach and its evaluation metrics in the Methodology section below. 
+
+The empirical work by Bellotti (2017) is offered as a proof of concept only.  In it, he compares a model that uses point estimates for market adjustments and one that uses a probabilistic approach.  The value ranges (referred to as ‘regions’ in CP) from the probabilistic approach offer validity (at a 90\% confidence) but less efficiency than those from the point estimate approach.  The innovation in this work is the application of the conformal predictor approach to an AVM and in expressing a framework for testing for uncertainty calibration.  The empirical results do not allow us to generalise much about different approaches to estimating prediction intervals.   
+
+Additionally, and somewhat as an afterthought, Bellotti (2017) conducts an analysis of inefficiency -- or an error model -- aimed at explaining the sources of wide value ranges by regressing the range size on the predictive variables used in the model.  The results of this analysis are presented only as an example of how future AVMs may be able to leverage this information in making model improvements. 
+
+\subsubsection{Performance Comparison Research}
+
+There is a wide set of academic research that compares different valuation methods against one another in order to determine the most performant.  Often, this work takes the form of testing a new and/or improved statistical or machine learning model against a more commonly used or benchmark model.  We review this work with an eye toward understanding how often, if ever, uncertainty calibration is considered when judging model performance. 
+
+We took a convenience sample of 42 published studies that presented at least one comparison of valuation models in the paper. We sampled from both traditional real estate-focused journals as well as newer publications aimed at the broader machine learning discipline. Our sample leveraged a recent literature review of hedonic pricing studies by Wang and Li (2019) to generate this sample.  Each reviewed paper made some use of accuracy metrics that compared predicted to actual sales price.  The full list of papers is shown in Table A1 in the Appendix. 
+
+Within this sample, not a single paper presented an analysis of uncertainty or prediction intervals. In each case, the only model output that was analyzed was the point prediction.  Given the discussion of the importance of uncertainty calibration within industry guidelines, it is surprising to see value ranges and uncertainty in general broadly overlooked by comparative AVM studies within the academic research.  
+
+\subsection{Industry White Papers}
+
+The actual details of how industry AVMs operate are usually a closely guarded trade secret. Many AVMs and firms related to the AVM industry do publish white papers that provide some insight into how each company’s models work.   Within the professional AVM space, there are two broad types of AVM producers -- those that focus on providing single valuations to banks for lending purposes and those that do not, or at the very least, have a broader focus.  This distinction is important as lending-focused providers tend to follow the industry standard approach of representing uncertainty as a combination of forecast standard deviation (FSD) and Confidence Score, while non-lending focused AVMs tend to be more creative.
+
+The standard FSD and Confidence Score approach to reporting uncertainty is standard in name only. In fact, the variation in how FSDs and Confidence Scores are created between providers is a major source of difficulty throughout the entire AVM industry (MBA 2019; Clear Capital 2020).     Broadly, forecast standard deviations (FSDs) are produced to represent the 68.2 confidence level of possible values and are intended to provide a ‘statistical degree of certainty’ (Corelogic 2017).  This much is agreed on by most producers.  How this value is calculated varies widely and is often left poorly explained.  
+
+Confidence scores are even less standardised than FSDs.  Confidence scores do not have an agreed upon representation, other than a subjective level of confidence about the valuation.  Some providers give this in letter format, grades of A to F, or from High to Low.  Others represented it purely as a reciprocal of the FSD,a practice that provides no additional information to the user.  Still others provide a numeric confidence score, say of 60 to 100 (Corelogic 2017), but are not clear on how a value of, say 85 might differ from 65.  
+
+Moving away from the lending-focused providers additional innovation is present in the reporting of uncertainty.  HouseCanary maintains the FSD terminology but does not assume normality and, instead computes FSDs from the empirical error distribution that they observe through their validation tests (HouseCanary 2018).  GeoPhy -- a provider of AVMs for office and retail properties -- opts for Robustness and Interpretability scores as measures of the confidence in and understandability of its AVM results (GeoPhy 2019).  
+
+\subsection{Taxonomy of Uncertainty}
+
+It can be difficult to completely disentangle FSDs and Confidence Scores when attempting to understand and categorise the methods used to measure and report uncertainty in AVMs.  As a result, we survey the existing reported approaches to AVM uncertainty providers by 
+considering FSDs and Confidence Scores jointly.  In doing so, we find that three fundamental approaches to calculating uncertainty are generally applied: 
+
+\begin{itemize}
+\item Error-Based
+\item Model-Based
+\item Data-Based
+\end{itemize}
+
+\subsubsection{Error-Based}
+
+Error-based approaches use a distribution of known prediction errors from the model to directly create the uncertainty estimates for new predictions that are made.  Ecker et al (2019) offer a clear example of this within a toy example using a very basic AVM with a training set of 30 sales used to value one sample home.  They begin by calculating the predictive error on each of the 30 training sales through leave one out cross validation approach on a linear model.  They then compute the standard deviation of the 30 cross-validated errors and label this the forecast standard deviation (FSD) of the model. Next the 30 sales in the same linear model specification are used to generate a point prediction estimate of the single example home.  To create a low and high value range (prediction intervals) they multiply the FSD by the factor that creates a normal distribution coverage that is desired -- a 68\% range would be a factor of 1.0, a factor of 1.28 for 80\% and 2.0 for 95\%. 
+
+The process described in HouseCanary’s white paper follows a similar path by using the empirical distribution of the errors but does not force normality on the range. The approach by which they then directly tie observed errors to individual home prediction intervals is not elaborated. Other vendors and consultant reports appear to suggest an error-based approach, but also do not provide definitive descriptions (Gordon 2005; Connected Analytics 2015; Freddie Mac 2020). GeoPhy’s (2019) ‘robustness score’ also falls into this category.  This score is created by summing the reciprocals of a number of standard error metrics, though again, no exact mapping to individual predictions is provided.  
+
+\subsubsection{Model-Based}
+
+Model-based approaches to uncertainty are generally derived one of two ways.  The first is in cases where multiple different models are calculated -- an ensemble (Clear Capital 2020).  In such cases, a measure of uncertainty derives from looking at the distribution of values that are produced by the different models and creating uncertainty estimates (at a certain confidence bounds). This can be done through different model classes in a traditional ensemble or through a bootstrapping, or re-sampling, approach with the same model class and specification (Lipscomb 2017).  As an example, Miller and Sklarz (2017) offer a method for using variation in comparable sale prices within traditional appraisal framework to derive prediction intervals.  
+
+A second model based approach is to use standard prediction interval calculations derived from parametric model assumptions.  This approach is generally limited to linear based models that have coefficient and standard error outputs from which to calculate prediction intervals.  Intervals from this latter approach end up being symmetric, while those from the first can take any distributional shape. 
+
+\subsubsection{Data-Based}
+
+Data-based approaches to uncertainty are the ‘catch-all’ category.  These are the least well defined and explained.  Corelogic (2011, 2017) presents a description common for this category: ‘Range of estimates based on consistency of information’.  Essentially, its a proprietary metric or index derived from some measure of the overall data quality of the model.  These data quality metrics could be based on data completeness, latency, density, validity, some combination of these factors or even other measure of confidence in the underlying data driving the model.  
+
+We see advantages and disadvantages to each of the above approaches.   Conceptually, we can compare these across three components: 1) Directly tie to past model performance; 2) Consideration of model class used; and 3) Recognition of data completeness, density and quality.  Each approach can be categorised as addressing these components either directly, indirectly or not at all (Table 2).  
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|p{1.2cm} | p{1.6cm} | p{1.6cm} | p{1.6cm} |} 
+ \hline
+  \textbf{Method} & \textbf{Ties to Observed Errors} & \textbf{Considers Model Class} & \textbf{Recognises Data Quality Differences} \\ [0.5ex] 
+ \hline
+ Error-Based & Directly & Indirectly & No \\ 
+ \hline
+ Model-Based & Indirectly & Directly & Indirectly \\
+ \hline
+ Data-Based & No & No & Directly \\
+ \hline
+\end{tabular}
+\caption{Prediction Interval Method Classification}
+\label{table:2}
+\end{table}
+
+\subsubsection{Additional Topics}
+
+There are two additional topics that require further clarification or discussion in understanding the existing work on uncertainty in valuation. The first is the issue of symmetry in prediction intervals.  A symmetric prediction interval means that the upper end range value is always the same distance from the point estimate as the lower end range value.  Methods that are based on normal distributions and multipliers of FSD values (Gordon 2005; Freddie Mac 2020) necessitate symmetric ranges. Other approaches are not limited to symmetric ranges.  Ecker et al (2019) argue that symmetric ranges are always desirable; we disagree.  As many (most?) real estate pricing decisions are influenced, at least in part, by comparison of local and recent comparable sales, it is unlikely that all price points of reference are evenly distributed around the point estimate in a symmetric fashion.  Related, home prices, like other financial assets, often fall into approximately log-normal distributions.  This means that certain model classes and/or data transformations can inherently generate symmetric prediction intervals and errors; however, this symmetry will not be represented in standard dollars, but rather in log dollars. Finally, other drivers of uncertainty such as measurement errors may also not show symmetric variation.  In sum, we believe that the desirability of symmetric uncertainty estimates should be an empirical question.  
+
+Next, much of the literature on uncertainty in valuation refers to the range around a single predicted value as a ‘confidence interval’ instead of a ‘prediction interval’.  Confidence intervals express the likely interval around a measure of a  parameter, not a single prediction instance.  More simply put, confidence intervals relate to model parameter estimates, prediction intervals to estimates of the dependent variable (Wood 2005).  Therefore, we consider ‘prediction interval’ to be the more correct terminology.  Moreover, prediction intervals are usually considerably wider than a confidence interval as they incorporate the variance of all terms in a model relevant to make a prediction, including any global error terms. Adding to the confusion here is the use of ‘Confidence Scores’ in standard AVM outputs and the general use of the term ‘confidence’ to represent the opposite of uncertainty. We use ‘prediction intervals’ to indicate the a range of values around a single predicted value and ‘confidence level’ to indicate how much confidence (and a scale of 1\% - 100\%) that the prediction interval represents.
+
+\subsection{Summary of Literature}
+
+Reviewing the literature shows considerable variation in the terminology and approaches to both calculating and reporting uncertainty in a real estate valuation context.  The industry guidelines all agree that uncertainty measures and actual model performance should be correlated; i.e. model uncertainty should be calibrated.  However, guidelines are generally quiet on more prescriptive measures as to how uncertainty should be calculated, measured or reported.  Academic research has laid a conceptual basis for uncertainty in valuation, but has put forth little energy towards empirically testing for calibration in uncertainty estimates.  Finally, industry white papers provide a brief peek into how the major AVM practitioners are representing uncertainty in their AVM outputs, but here, too, there is little agreement and few details. In fact, the basic theory behind how to calculate uncertainty varies between providers with some using either Error, Model or Data-based approaches to express uncertainty estimates.   
+
+We believe that this variety in approaches and terminology is a major disservice to the industry and consumers in general.  Further, we believe the question of which approach to use should be answered empirically.  In the remainder of this paper, we set out to test a variety of different approaches to generating prediction intervals -- one form of uncertainty estimates -- on a deep, longitudinal data sample from King County WA (Seattle Metro).
+ 
+\section{Methodology}
+
+Our review of the literature showed three primary methods for creating prediction intervals: error-based, model-based and data-based.  Of these, the data-based approaches are the least well explained and, corresponding, the least replicable outside of a full, industry AVM setting. In short, they are very difficult to create reproducible empirical examples of.  As such, we ignore these approaches in this work; focusing solely on the error- and the model-based methods.
+
+In this section we detail the approach we use to test the performance of different methods to generate calibrated prediction intervals. We begin by discussing the model classes and geographic scales at which we perform our empirical tests.  Next, we outline the two approaches to prediction interval creation that we will use.  We follow this by describing the metrics used to evaluate calibration.  Finally, we conclude this section by outlining the full experimental approach, including sensitivity tests. 
+
+\subsection{Model Classes and Geographic Scale}
+
+The goal of this paper is to compare the quality of model calibration under error- and model-based approaches for creating prediction intervals.  To provide the most generalizable set of findings, we make these comparisons across two different model classes -- linear and non-linear -- and at two different geographic scales -- county and submarket.  
+
+Our linear model specification uses a simple ordinary least squares (OLS) estimator in which the natural log of the sale price is expressed as:
+
+\[ln(price) = f(S, L, T)\]
+
+Where \textit{S} are structural features, \textit{L} are locational features and \textit{T} are temporal features.  More specifically, these variables are:
+
+\begin{itemize}
+\item Year Built (S)
+\item Home Size in SqFt (S)
+\item Home Quality (S)
+\item Home Condition (S)
+\item \# of Bedrooms (S)
+\item \# of Bathrooms (to the .25 bath) (S)
+\item Lot Size in Square Feet (S)
+\item Waterfront Location (binary) (L)
+\item View Score (L)
+\item Latitude (L)
+\item Longitude (L)
+\item Month of Sale \textit{(monthly dummy variables)} (T) 
+\end{itemize}
+
+While we recognise that it is unlikely that commercial-grade AVMs use a specification this simple, our goal is to explore prediction interval calibration, not model accuracy, and a relatively parsimonious OLS specification provides a useful baseline.  
+
+As a complement, we also estimate a non-linear model via a random forest.  To keep the comparisons as equal as possible, we use a very similar model specification:
+
+\[Price_{timeadj} = f(S, L) \]
+
+Where \textit{Price\_timeadj} is the time adjusted sale price, \textit{S} are structural features and \textit{L} are locational features. There are a few slight differences from the linear specification:
+
+\begin{enumerate}
+\item We do not log the sale price as a random forest is not as seriously affected by non-normal dependent variables.
+\item We time adjust\footnote{We use a robust linear model to create a house price index and then adjust all sales to a single point in time (the most recent month in the data).  We use the \texttt{hpiR} R package to create the house price indexing (Krause 2020). } the sale prices before estimating the model as random forests do not handle temporal control variables as well as linear models. 
+\end{enumerate}
+
+Our random forest model uses the default hyperparameters set in the R \texttt{ranger} package: 500 trees, a minimum node size of 5; and an ‘mtry’ of the square root of the number of features in the model (Wright and Ziegler 2017). 
+
+We also conduct our comparisons at two different geographic scales.  The primary reason for doing so is that overall data size or density may influence the quality of prediction intervals.  By estimating models with all data and then again with subsets of it, we can test for changes to calibration based on sample sizes.  
+
+The first scale is the entire county, whereby we use all of our data in the same model.  As the test county is rather large, nearly 2.2 million residents in 2019, we can break the area into many smaller ‘submarkets’ and still have enough data to estimate and evaluate model performance.  We manually create 20 residential submarkets based on existing county tax assessor assessment areas.  Most of these areas contain roughly 1/20 of the total volume of transactions in the county, though there are a few larger and smaller submarkets. In the results below we refer to the full county models as 'Global' and those estimated at the submarket level as 'Local'. 
+ 
+\subsection{Prediction Interval Methods}
+
+The example presented by Ecker et al (2019) represents an error-based approach. In their example all properties, regardless of their characteristics, receive the same prediction interval width.  These widths are expressed in a percentage sense; i.e. relative to the point prediction. As an example,  if the model has a known FSD of 15\%, then all properties would get a prediction +- 15\% if the provider were giving an 68.2\% prediction interval.  If 90\% confidence level is desired, then the prediction intervals would be be 24.7\% +/- (15\% * 1.645).  Regardless of the confidence level, the error approach will produce symmetric and normally distributed prediction intervals. 
+
+Producing an error-based uncertainty measure requires knowledge of the known error distribution of the model.  Following Ecker et al. (2019) we calculate these via cross-validation (5-fold) of the training sample with the model in question.  The standard deviation of the cross-validated prediction errors from the model are treated as the FSD.  An error-based approach produces percentage low and high deviations from the point prediction which are then converted into low and high range values.  
+
+Unlike the error-based method, the model-based approach varies by model class. Additionally, and also in contrast to the error-based method, model-based approaches directly estimate the low and high range values, not the width of the range itself. As such, the model-based approaches can be both asymmetric and non-normally distributed. 
+
+\subsubsection{Linear Model}
+
+For the linear model, we create prediction intervals by resampling errors (Davidson and Hinkley 1997). We assume the error term in our linear model has \textit{iid} errors, but we do not require the assumption of normality. We then mimic samples from the distribution : \((\widehat{\beta}*X) - (\beta*X + \epsilon)\). We run 100 bootstrap trials on each model and select our prediction intervals from the distribution of the predictions resulting from the 100 trials. In each trial, the dependent variable is the predicted value of that observation perturbed by a variance adjusted residual, sampled from the residuals of the base model, with replacement (Davidson and Hinkley 1997).  For example, for an 80\% confidence level, we would extract the 10th and the 90th quantiles from the distribution of bootstrapped predictions as our prediction interval.\footnote{It should be noted that is a considerably more complex approach to prediction intervals than the standard linear model extension common in textbooks, whereby the distributions of parameter estimates and model standard errors are combined leveraged to produce prediction intervals.}  
+
+The full algorithm for a single prediction, \textit{i}, with an 80\% prediction interval is:
+\begin{enumerate}
+\item Estimate the base model with the full set of training data, length \textit{N}
+\item Make a point prediction for for observation \textit{i} using the base model
+\item Variance adjust the residuals from the base model where the adjusted residual is the residual divided by the square root of 1 - the leverage of that observation
+\item Repeat the following 100 times
+\begin{enumerate}
+\item Sample from the adjusted residuals in \#3 \textit{N} times
+\item Create a perturbed predicted value for each training observation by adding the sampled residual from 4(a) to the predicted value of each training observation from the base model
+\item Re-estimate the model with new dependent variable values from step 4(b)
+\item Extract the residuals from this new model
+\item Variance adjust these with the formula from 3
+\item Sample 1 of the residuals from 4(e) and add to the predicted value for observation \textit{i} from model in 4(c) to create a new predicted value
+\end{enumerate}
+\item From the 100 prediction from step 4(f), sort in order and select the desired quantiles.  In the case of a 80\% confidence level, the 10th and 90th percentile. 
+\end{enumerate}
+
+\subsubsection{Non-Linear Model}
+
+Generating prediction intervals from the non-linear model leverages the quantile random forest approach first offered by Meinhausen (2006).  For each predicted value, we examine the entire distribution of sales prices that occupy shared terminal leaf nodes from each individual tree in the random forest.  We order these sale prices, and then, like the linear bootstrap approach above, we select our low and high prediction interval values from the corresponding quantiles in the distribution of values extracted from the leaf nodes. Again, for a 80\% confidence level, we choose the estimated values at the 10th and 90th percentiles of the distribution of values from the leaf nodes. 
+
+\subsection{Evaluation Metrics}
+
+Calibration is the primary metric for evaluating prediction interval reliability.  In this context, calibration refers to the agreement between the coverage of the prediction intervals -- the proportion of validation points which fall within the interval range -- and the desired confidence level (Leathart and Polaczuk 2020).  As an example, for a model producing prediction intervals at an 80\% confidence level 80\% of the actual observed validation points would need to fall within the prediction intervals.  
+
+If examining a single confidence level, then evaluating for calibration is simply a comparison of the coverage rate and the desired confidence level.  To expand this across the distribution of potential confidence levels that a user may desire, reliability plots offer a visual tool to assess calibration (DeGroot and Fieberg 1983; Murphy and Winkler 1987; Brocker and Smith 2007).  A reliability plot simply plots the coverage rate against the desired confidence level for a set of confidence levels. In these, a diagonal line from the origin (0,0) to the upper-right (1,1) is the desired outcome.  Deviation above the line indicates underconfidence (too wide) and derivation below it an overconfidence (too narrow).  
+
+In this paper, we adopt both the calculation of the calibration as the difference between coverage and confidence level and use reliability plots to visualise our results. Additionally, we calculate a median absolute error (MAE) statistic which represent the median difference between each capture percentage and its corresponding confidence level across a range of confidence levels.  While a simple, aggregate measure like MAE loses some of the depth of the reliability plots, it does offer for quantitative comparison between different models and experiment settings.  For the tests below we examine confidence levels from 5\% to 95\% at every 5\%, but, in practice any sequence of levels could be used.  While it is unlikely that very small confidence levels -- those less than 30\% or so -- are useful in a practical situation, we feel that it is useful to examine the entire range of confidence levels in assessing performance in a research setting. 
+
+Some previous work (Shafer and Vovk 2008; Bellotti 2017) treats the measure of calibration as a binary metric; the coverage of a model’s prediction intervals at a given confidence level either hit the intended proportion (are calibrated) or they don’t (are not calibrated).  As such, it is a one-sided measure whereby a coverage of 84\% for an 80\% confidence interval is more desirable than a 79\% coverage.  Here, we treat mis-calibration as a continuous measure in which intervals that are too conservative -- coverage greater than confidence level -- are equally wrong as intervals that are too aggressive (too tight). We adopt this measure as the one-sided approach offered by Shafer and Vovk (2008) is certainty pertinent in a risk-related framework, but may not be in other cases.  To present the broadest and most widely operable evaluation framework, we opt for a two-sided metric.  Our MAE statistic, being absolute, accounts for the two-sided nature of our treatment of mis-calibration.  
+
+All else equal, narrower prediction intervals are more informative and more efficient than wider ones.  A measure of this efficiency is the second common metric relating to the evaluation of prediction intervals.  Efficiency is generally measured as the mean or median of the widths of all prediction intervals at a given confidence level.  We adopt this approach, using the median as our measure of efficiency. 
+
+\section{Empirical Analysis}
+
+\subsection{Data}
+
+To empirically test the performance of the two uncertainty methods we use a large, longitudinal dataset from King County, WA.  These data include all single family residential home sales (detached and townhomes only) in King County (Seattle Metro) from January 1, 1999 through December 31, 2019. This data originates with the King County Tax Assessor but has been collected, cleaned and is available online in an open sourced R package.\footnote{See https://github.com/anonymousreauthor/kingCoData for instructions on how to access this data as well as details on its construction.}
+
+The raw data includes 485,044 transactions during this 21-year time period.  There are 38 different features or variables about each home. Our analysis here is interested in performance across a wide set of homes and therefore we begin by leaving all data rows in our sample.  A sensitivity exercise after our initial findings uses a smaller set of observations.
+
+Table 3 below shows a summary of sales data along with the variables used in the models tested below. As can be seen, there is a wide variety of prices and home types in King County.  Seattle and its suburbs are highly variable, with multi-million dollar mansions on the waterfront areas and in the central, older neighborhoods, with smaller and more affordable residences in the far South and North.  The variables are, generally, self explanatory with the exception of view score.  The King County Assessor assigns a rating on a scale of 0 (no view) to 4 (excellent view) for a variety of different views (water bodies, mountains and city skylines) in the region. We sum all the view score ratings to create the composite view score for each observation in data.  As noted above, we leave in all data, even those that may appear to be outliers or errors (such as the 0 square footage home). 
+
+\begin{table*}[h!]
+\centering
+\begin{tabular}{l|r|r|r|r|r|r}
+\hline
+\textbf{Variable} & \textbf{Min} & \textbf{25th} & \textbf{Median} & \textbf{Mean} & \textbf{75th} & \textbf{Max}\\
+\hline
+sale\_price & \$50,293 & \$280,000 & \$400,000 & \$503,517 & \$600,000 & \$30,000,000\\
+sale\_date & 1999-01-01 & 2003-12-22 & 2008-03-12 & 2009-05-04 & 2015-05-20 & 2019-12-31\\
+year\_built & 1900 & 1953 & 1978 & 1973 & 2000 & 2020\\
+sqft & 0 & 1450 & 1950 & 2111 & 2590 & 22370\\
+grade & 1.00 & 7.00 & 7.00 & 7.66 & 8.00 & 20.00\\
+condition & 1.00 & 3.00 & 3.00 & 3.47 & 4.00 & 5.00\\
+beds & 0.0 & 3.0 & 3.0 & 3.4 & 4.0 & 33.0\\
+baths & 0.00 & 1.75 & 2.25 & 2.16 & 2.50 & 12.75\\
+sqft\_lot & 0 & 5075 & 7500 & 14272 & 10366 & 9539640\\
+view\_score & 0.00 & 0.00 & 0.00 & 0.51 & 0.00 & 20.00\\
+wfnt & 0.00 & 0.00 & 0.00 & 0.01 & 0.00 & 1.00\\
+latitude & 47.16 & 47.45 & 47.56 & 47.55 & 47.67 & 47.78\\
+longitude & -122.53 & -122.32 & -122.22 & -122.21 & -122.12 & -121.16\\
+\hline
+\end{tabular}
+\caption{Summary Statistics}
+\label{table:3}
+\end{table*}
+
+In addition to the data provided in the raw data, we add one more variable, a submarket label.  The existing data have an Assessment Area field that indicates the small assessment zones designated by the local assessment officials.  There are 95 of these, many of which are too small in which to estimate separate valuation models.  To remedy this, we aggregate these 95 areas into 19 core ‘submarkets’ based on geographic proximity, natural boundaries and our local knowledge of the area. One highly useful feature of these assessment areas is that they are not always geographically contiguous.  Some, especially those covering special properties such as high-end waterfront homes, are spread over a wide area, interspersed with other areas.  This highlights the advantage of using these assessment zones over, say, ZIP codes designations as these zones are specially created to capture local market effects.
+
+\subsection{Empirical Approach}
+
+To test the performance of the two uncertainty methods, we employ the following approach across the entire time frame of our study January 1999 through December 2019. 
+
+\begin{enumerate}
+\item Isolate one year’s worth of sales (training data). Ex. January 1999 through December 1999
+\item Use the training data to make point predictions on sales that sold in the month following - January 2000
+\item For both of the uncertainty approaches -- error-based and model-based -- calculate prediction intervals at confidence levels ranging from 5\% to 95\%, every 5\%, 19 in all. 
+\item Compute the valuation error by comparing the predicted value to the known sale price
+\item Move the ‘window’ of analysis ahead one month and repeat steps 1-4 for the entire time period.  With 21 years of data, minus the initial one year training period this amounts to 240 different ‘windows’ of analysis.
+\item Combine the results -- the predicted values, prediction errors and the two sets of prediction intervals -- from all 240 periods
+\item Calculate the model’s predictive accuracy for the point prediction values
+\item Calculate uncertainty calibration and efficiency for each of the two sets of uncertainty methods at each of the 19 intervals.
+\end{enumerate}
+
+As discussed above, we evaluate the uncertainty methods for two different model classes -- linear and non-linear -- and at two different geographic scales -- global and local.  This equates to four different comparative situations. 
+
+\begin{itemize}
+\item Linear Model, Global Data
+\item Linear Model, Local Data
+\item Non-Linear Model (Random Forest), Global Data
+\item Non-Linear Model (Random Forest), Local Data
+\end{itemize}
+
+\subsection{Results}
+
+In Table 4, we present a summary of the predictive accuracy of the point predictions for the greater than 400,000 sales in King County over the 2000 through 2019 time frame. The metrics are as follows: MdAPE, median absolute percentage error; MdPE, median percentage error; PE10, percent within 10 percent of sale price; and PE30, percent within 30 percent of sale price.  The focus of this work is on prediction intervals; we present these point estimate accuracy figures as context only.  More specifically, two key findings from this accuracy analysis are relevant in interpreting the calibration and efficiency results below. 
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{l|l|r|r|r|r}
+\hline
+\textbf{Model} & \textbf{Sample} & \textbf{MdAPE} & \textbf{MdPE} & \textbf{PE10} & \textbf{PE30}\\
+\hline
+Linear & Global & 0.136 & -0.004 & 0.384 & 0.827\\
+Linear & Local & 0.093 & -0.009 & 0.529 & 0.902\\
+\hline
+Non-Lin & Global & 0.074 & -0.002 & 0.608 & 0.917\\
+Non-Lin & Local & 0.072 & -0.003 & 0.615 & 0.919\\
+\hline
+\end{tabular}
+\caption{Accuracy Results}
+\label{table:4}
+\end{table}
+
+First, the non-linear models -- the random forests -- are considerably more accurate than the linear approach. This is especially true at the global (entire county) scope.  Moving to a local model helps the linear model considerably, while it has limited impact on the accuracy of the non-linear model as the flexibility in the non-linear approach can better handle spatial heterogeneity.  This is not a surprising result given the heterogeneity of the housing market in King County.  
+
+Second, all four models are relatively unbiased with median percentage errors (MdPEs) near 0.  The slight under-prediction bias is likely due to the experimental design whereby we generate predictions in, for example, January 2000 using data from January 1999 through December 1999.  The overall level of appreciation in the prediction month likely contributes to this small bias figure as there were more months of positive price gains during this 20-year period than months with price declines.  Again, given our focus on prediction intervals and on the relatively low level of bias we are not concerned with any negative impacts on our generalizability due to the experimental design. 
+
+\subsubsection{Calibration}
+
+A comparison of calibration results for both methods across all four combinations of model class and geography are illustrated with the reliability diagram in Figure 1.  A number of general findings can be made.  First, across all four experiments, the error-based approaches (blue lines) present the less calibrated prediction intervals.  For the linear models (left hand panels), the model-based approaches are nearly perfectly calibrated, with the non-linear models (right hand side) there is slight mis-calibration, but still vastly out-performing the error-based approach.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[scale=.27]{Figure1.png}
+\caption{Reliability Diagram}
+\label{fig:reliability}
+\end{figure}
+
+Visually, it is hard to distinguish much of a difference between the Global and the Local sampling methods.  Table 5 shows the median absolute errors from perfect calibration for the four models across the 19 confidence levels.  For model-based approach in the linear and non-linear models, the local sampling shows a slight gain in calibration.  The results are mixed for the error-based approach.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l|l|r|r}
+\hline
+\textbf{Model Class} & \textbf{Sample} & \textbf{Error-Based} & \textbf{Model-Based}\\
+\hline
+Linear & Global & 0.094 & 0.010\\
+Linear & Local & 0.103 & 0.002\\
+\hline
+Non-Lin & Global & 0.155 & 0.057\\
+Non-Lin & Local & 0.135 & 0.045\\
+\hline
+\end{tabular}
+\caption{Calibration Results (Median Absolute Error)}
+\label{table:5}
+\end{table}
+
+
+Across all experiments, the error-based approach generates prediction intervals that are too conservative, especially in the 25\% to 75\% confidence levels.  This problem is greater with the non-linear than in the linear model class.  A likely reason for this is that the error approach assumes a normal and symmetrical error distribution, an assumption that does not hold in this case.  Additionally, our experimental design assumes that the types of homes that sell in the prediction month are similar to those in the one year training data period; deviations from this will cause less reliable prediction intervals under the error approach as opposed to the model approach.  The model-based approach is able to account for changing samples as it uses the characteristics of the homes being valued to generate prediction intervals and not just past model performance (as the error-based method does). 
+
+\subsubsection{Efficiency}
+
+Looking at efficiency (Figure 2) we see a very similar trend across all four experimental settings.  The error-based prediction intervals are the least efficient (widest). Their relative inefficiency over the model-based approach is constant across model class and sample. These findings are not surprising given the overly conservative coverage rates shown in Figure 1. 
+
+\begin{figure}[h!]
+\centering
+\includegraphics[scale=.28]{Figure2.png}
+\caption{Efficiency by Method}
+\label{fig:effm}
+\end{figure}
+
+Re-plotting to compare efficiency differences between the linear and the non-linear model tells a more nuanced story (Figure 3). At a global scale, the non-linear models show size-able efficiency gains over the linear model. These improvements are slightly greater for the error-based approach. Moving to the local level, the efficiency gains from the non-linear model mostly disappear, especially for the model-based approach. As we saw in Table 4, the overall predictive accuracy differences between the linear and non-linear model are greatly reduced at the local scale as well, a phenomenon contributing to the findings here. 
+
+\begin{figure}[h!]
+\centering
+\includegraphics[scale=.28]{Figure3.png}
+\caption{Efficiency by Model Class}
+\label{fig:effmc}
+\end{figure}
+
+\subsection{Sensitivity Tests}
+
+\begin{figure*}[h!]
+\centering
+\includegraphics[scale=.56]{Figure4.png}
+\caption{Reliability Diagram - Sensitivity}
+\label{fig:calibsens}
+\end{figure*}
+
+The above results were derived using all observations in the dataset.  With this sample, we find that the model-based approach provides more reliable and efficient prediction intervals across the four different experimental settings.  The preference for the model-based approach does vary slightly with the individual experiment -- linear vs non-linear and global vs local -- but in all cases, model-based is preferred.  
+
+These findings are based on a large, longitudinal dataset from which we’ve removed no outlying observations.  To examine the sensitivity of our initial findings to the data quality, we perform two sensitivity tests.  In the first, we filter the data considerably to simulate a ‘cleaner’ data situation.  We then do the opposite and create a ‘dirtier’ dataset by perturbing the sales prices for the original dataset in order to make the models less efficient at prediction.  By undertaking both of these tests, we aim to expand the generalizability of our finding to AVM uses that have both higher and lower quality data than what our original dataset contains.
+
+For the ‘filtered’ or ‘cleaner’ test, we employ two filters.  First, we remove all transactions that had a major change in home facts over the twenty-year time period.  We remove these as there is some doubt over whether or not the sale was observed before or after the renovation or rebuild. Next, we limit our data to the middle 50th percentile of sales prices in each of the 21 years, essentially eliminating both low and high end quartile of sales from the sample.  This creates a more homogeneous set of homes to value.  Employing these two filters reduces our observations down to 218,768, a reduction of 55\% from the full dataset. 
+
+To create  ‘dirtier’ or ‘perturbed’ data we add an artificial error term to the sale price by sampling, with replacement, from the observed prediction errors in our original test models. The total count of observations stays the same in the ‘dirtier’ sensitivity test, only the sale prices have been perturbed. 
+
+The overall accuracy for the cleaner dataset improves markedly, with approximately 20\% to 35\% relative gains in accuracy across all model class and data sample combinations (Table 6).  Conversely, the perturbed data greatly decreased the model accuracy over the benchmark original data.  The linear models saw increases in errors of 30\% to 60\% while the errors for the non-linear models essentially doubled.  
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l|l|r|r|r}
+\hline
+\textbf{Model} & \textbf{Sample} & \textbf{Filt.} & \textbf{Orig.} & \textbf{Pert.}\\
+\hline
+Linear & Global & 0.097 & 0.136 & 0.183\\
+Linear & Local & 0.067 & 0.093 & 0.152\\
+\hline
+Non-Lin & Global & 0.056 & 0.074 & 0.146\\
+Non-Lin & Local & 0.054 & 0.072 & 0.146\\
+\hline
+\end{tabular}
+\caption{Accuracy Results - Sensitivity Tests}
+\label{table:6}
+\end{table}
+
+\begin{figure*}[h!]
+\centering
+\includegraphics[scale=.56]{Figure5.png}
+\caption{Efficiency by Model Class}
+\label{fig:effmod}
+\end{figure*}
+
+As expected, the calibrations improved across all model classes, uncertainty method and data sampling settings when using the filtered or cleaned data (left panels, Figure 4) as compared to the original data (center panels).  The improvements are particularly noteworthy for the error-based model which, though still slightly out of calibration, does performance much closer to the model-based approach. This suggests that with heavy data filtering -- only valuing the middle 50th percentile of properties by price -- both the resulting errors are more normally distributed and/or the prediction sample is more similar to the training sample.  In short, with serious data filtering the assumption underlying the use of the error model may actually be met.
+
+Unintuitively, the perturbed data sample also results in a reduction in mis-calibration for all model classes, method and sampling (right hand panels).  The differences here, however, are smaller than the gains from the filtered data (Table 7).  The likely rationale for this counter-intuitive result is that when the various model class and uncertainty method combination are not properly calibrated, they miss on the side of being too conservative.  Adding in additional, synthetic, disturbances simply converts the overly conservative prediction intervals into ones that are more appropriately calibrated.  Under this explanation, it isn’t that the perturbation ‘helps’ the model, it simply counteracts existing mis-calibrations.  
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l|l|l|r|r|r}
+\hline
+\textbf{Model} & \textbf{Method} & \textbf{Sample} & \textbf{Filt.} & \textbf{Orig.} & \textbf{Pert.}\\
+\hline
+Linear & Error & Global & 0.022 & 0.094 & 0.075\\
+Linear & Error & Local & 0.020 & 0.103 & 0.085\\
+\hline
+Linear & Model & Global & 0.014 & 0.010 & 0.011\\
+Linear & Model & Local & 0.012 & 0.002 & 0.003\\
+\hline
+Non-Lin & Error & Global & 0.052 & 0.155 & 0.098\\
+Non-Lin & Error & Local & 0.050 & 0.135 & 0.091\\
+\hline
+Non-Lin & Model & Global & 0.032 & 0.057 & 0.018\\
+Non-Lin & Model & Local & 0.022 & 0.045 & 0.010\\
+\hline
+\end{tabular}
+\caption{Calibration Results - Sensitivity Tests}
+\label{table:calibsens}
+\end{table}
+
+A look at the efficiency metrics across the various sensitivity tests (Figure 5) presents more intuitive finding; namely that efficiency is greatly improved in the filtered experiment and degraded by the perturbed test. Additionally, moving from the filtered data up through to the perturbed sample, the preference for the model-based approach over the error-based approach increases in strength.  This suggests that, again, for either dirtier data and/or data from the entire distribution of home prices in a given region a model-based approach is dominant.  
+
+\section{Discussion}
+
+The uncertainty of an Automated Valuation Models (AVMs) point estimate is a key information point for many users of AVM outputs.  Despite this, the existing literature and guidelines around how to estimate, measure and report uncertainty is rather limited.  Industry and organizational guidelines for the AVM providers do emphasise that uncertainty calibration -- the agreement between confidence level and coverage -- is critically important, however, they offer few details on the mechanics of creating prediction intervals and measuring calibration. The academic literature has been producing research on mass valuation of real estate for nearly fifty years, yet the discussion of uncertainty estimates in general, and prediction intervals specifically, is limited and empirical tests of methods to do so is practically non-existent.  Adding to the difficulties here is a lack of established terminology around uncertainty in general.  
+
+In short, there is very little shared language, limited practical advice on interpreting uncertainty for users of AVMs  and a lack of specific instruction for AVMs producers on creating, measuring and reporting AVM uncertainty. In this paper we clarify the language around discussing uncertainty and outline an evaluation framework for measuring the quality or reliability of uncertainty estimates.  Use a twenty-year dataset of sales (over 480,000 observations) from King County, WA, USA, we then empirically test the performance of two opposing methods for generating uncertainty estimates (prediction intervals) across two different model classes and two different levels of geography or sample sizes in the models. 
+
+Our results show that the model-based approaches to generating prediction intervals dominate the error-based method by being more reliably calibrated as well as more efficient.  The preference for model-based approaches holds across both model classes (linear and non-linear) and at both spatial scales. Two sensitivity tests -- one using a smaller, filtered set of data and one with a perturbed response variable -- support our initial findings.   
+
+These findings contradict some advice given in the various industry guidelines, namely that uncertainty (often expressed as FSDs) should be derived directly from the known distribution of errors from the model.  What we find in our sample and with these approaches is that model-derived measures of uncertainty offer more closely calibrated prediction intervals.  We have only tested a few, relatively, simple approaches in this paper, we leave future improvement and expansion to follow-up work. 
+
+Our contribution is three-fold: 1) Consolidation of the literature from diverse sources such academic research, professional standards and industry whitepapers in order to create a standard set of terms with which to discuss uncertainty; 2) Adoption and application of a framework for evaluating the quality of uncertainty measures (prediction intervals) and 3) Execution of empirical tests of the most commonly discussed approaches for generating prediction intervals.  
+
+\subsection{Reproducibility}
+
+The results shown in this paper are fully reproducible.  The King County data are hosted in an R package at www.github.com/ anonymousREAuthor/kingCoData.  All code used above, again compiled in an R package, can be found at www.github.com/ anonymousREAuthoer/avmUncertainty.  Both the data and code links have instructions for installation, use and full reproduction.   
+
+\textit{(Note to reviewers: If accepted for publication, these will be updated to reflect the authors’ permanent and maintained sites for hosting reproduction code and data. The above are placeholders for peer review purposes only.)}
+
+%\section{Acknowledgements}
+%Vivamus ut velit mi. Curabitur faucibus scelerisque orci a varius. In hendrerit dictum felis non imperdiet. Curabitur imperdiet adipiscing purus non faucibus. Duis lacus nisl, egestas et lacinia sit amet, euismod ut ipsum. Aenean sem ligula, hendrerit nec venenatis quis, sagittis eu nibh. 
+
+\begin{thebibliography}{50}			
+\harvarditem{}{}{}Acciani, C., Fuccilli, V., and Sardaro, R. (2011) Data mining in real estate appraisal: A model tree and multivariate adaptive regression spline approach. \textit{AESTIMUM}, 58, 27-45
+
+\harvarditem{}{}{}Antipov, E. and Pokryshevskaya, E. (2012) Mass appraisal of residential apartments: An application of Random forest for valuation and a CART-based approach for model diagnostics. \textit{Expert Systems with Applications}, 39(2), 1772-1778.
+
+\harvarditem{}{}{}Appraisal Institute. (2018) \textit{Uniform Standards of Professional Appraisal Practice (USPAP)}, 2018-2019.
+
+\harvarditem{}{}{}Bao, H., and Wan, A. (2004) On the use of spline smoothing in estimating hedonic housing price models: Empirical evidence using Hong Kong data. Real Estate Economics, 32(3), 487-507. 
+
+\harvarditem{}{}{}Bao, H, and Wan A (2007) Improved Estimators of Hedonic Housing Price Model. Journal of Real Estate Research, 29(3) 267-304
+
+\harvarditem{}{}{}Belotti, A. (2017) Reliable region predictions for automated valuation models. Annals of Mathematics and Artificial Intelligence. 81, 71-84. 
+
+\harvarditem{}{}{}Bidanset, P. and , Lombard, J. (2014) Evaluating spatial model accuracy in mass real estate appraisal: A comparison of geographically weighted regression and the spatial lag model. Cityscape: A Journal of POlicy Development and Rse
+
+\harvarditem{}{}{}Bin, O. (2004) A prediction comparison of housing sales by parametric versus semi-parametric regressions. Journal of Housing Economics, 13(1), 68-84. 
+
+\harvarditem{}{}{}Bourassa, S., Cantoni, E., and Hoesli, M. (2007) Spatial dependence, housing submarkets and house price prediction. The Journal of Real Estate Finance and Economics. 35(2), 143-160.  et al 2007
+
+\harvarditem{}{}{}Bourassa, S., Cantoni, E., and Hoesli, M. (2010) Predicting house prices with spatial dependence: A comparison of alternative methods. Journal of Real Estate Research. 32(2), 139-159. 
+
+\harvarditem{}{}{}Brocker, J. and Smith, L. (2007) Increasing the reliability of reliability diagrams. Weather and Forecasting. 22(3) 651-661. 
+
+\harvarditem{}{}{}Carsberg Report (2002) \textit{Property Valuation}, Royal Institute of Chartered Sureveyors, London, UK
+
+\harvarditem{}{}{}Case, B, Clapp, J., Dubin, R., and Rodriquez, M. (2004) Modeling spatial and temporal house price patterns: A comparison of four models. The Journal of Real Estate Finance and Economics. 29(2), 167-191. 
+
+\harvarditem{}{}{}Chen, J., Ong, C., Zheng, L., and Hsu, S. (2017) Forecasting spatial dynamics of the housing market using Support Vector Machines. International Journal of Strategic Property Management. 21(3), 273-283. 
+
+\harvarditem{}{}{}Cheung, S (2017) Localized model for residential property valuation. International Real Estate Review. 20(2), 221-250. 
+
+\harvarditem{}{}{}Chico-Olmo, J (2007) Prediction of Housing Location Price by a Multivariate Spatial Method: Cokriging. Journal of Real Estate Research. 29(1), 91-114. 
+
+\harvarditem{}{}{}Clapp, J., Kim, H., and Gelfand, A. (2002) Predicting spatial patterns of House Prices using LPR and Bayesian Smoothing. Real Estate Economics, 30(4), 505-532. 
+
+\harvarditem{}{}{}Clapp, J (2003) A Semiparametric Method for Valuing Residential Locations: Application to Automated Valuation. Journal of Real Estate Finance and Economics, 27(3) pp 303-320. 
+
+\harvarditem{}{}{}Clear Capital (2020) The modern lender’s guide to the world of AVMs. Available at: https://www.clearcapital.com/resources/ebooks/ebook-the-modern-lenders-guide-to-the-world-of-avms/
+
+\harvarditem{}{}{}Collateral Assessment Technology Committee (CATC) (2009) Best Practices in Automated Valuation Model (AVM) Validation. 
+
+\harvarditem{}{}{}Connected Analytics (2015) Best Practice Validation and Comparison for Automated Valuation Models (AVMs). Available at: https://www.corelogic.com.au/sites/ default/files/2018-03/20151028-CL-RP\_AVM.pdf
+
+\harvarditem{}{}{}Corelogic (2011) Automated Valuation Testing. Available at: https://www.corelogic.com/downloadable-docs/automated-valuation-model-testing.pdf
+		
+\harvarditem{}{}{}Corelogic (2017) Forecast standard deviation and AVM confidence scores. Available at: https://www.corelogic.com/downloadable-docs/fsd-and-avm-confidence.pdf
+
+\harvarditem{}{}{}Davidson, A. and Hinkley, D. (1997) Bootstrap Methods and Their Application, Cambridge University Press.  
+
+\harvarditem{}{}{}Degroot, M. and Feinberg, S. (1983) The comparison and evaluation of forecasters. Journal of the Royal Statistical Society, Series D. 32(1/2) 12-22.
+
+\harvarditem{}{}{}Demetriou, D (2017) A spatially based artificial neural network mass valuation model for land consolidation. Environment and Planning B: Urban Analytics and City Science. 44(5) 864-883. 
+
+\harvarditem{}{}{}Ecker, M., Isakson, H., and Kennedy, L. (2019) An exposition of AVM Performance Metrics.  Working Paper.  Available at: http://www.math.uni.edu/~ecker/research
+
+\harvarditem{}{}{}European AVM Alliance (EAA) (2019) European Standards for Statistical Valuation for Residential Properties. 
+
+\harvarditem{}{}{}Feng, Y. and Jones, K (2015) Comparing multilevel modelling and artificial neural networks in house price prediction. IEEE International Conference on Spatial Data Mining and Geographical Knowledge. 108-114.
+
+\harvarditem{}{}{}Freddie Mac (2020) \textit{Freddie Mac Website}, available at: http://www.freddiemac.com/hve/fsd.html
+
+\harvarditem{}{}{}French, N. and Gabrielli, L. (2004) The uncertainty of valuation.  Journal of Property Investment and Finance. 22(6) 484-500
+
+\harvarditem{}{}{}French, N. and Gabrielli, L. (2005) Discounted Cash Flow: Accounting for Uncertainty.  Journal of Property Investment and Finance. 23(1), 76-89
+
+\harvarditem{}{}{}French, N. and Gabrielli, L. (2006) Uncertainty and Feasibility Studies: An Italian Case Study.  Journal of Property Investment and Finance. 24(1), 49-67
+
+\harvarditem{}{}{}Gao, G., Bao, Z., Cao, J., Qin, A., Sellis, T., and Wu, Z. (2019) Location-centered house price prediction: A multi-task learning approach. arXiv:1901.01774v1
+
+\harvarditem{}{}{}GeoPhy (2019) Inside the Geophy AVM: The Evolution of Commercial Real Estate (CRE) Valuations. Version 1.2.6, February 7, 2019.  Available at www.geophy.com. 
+
+\harvarditem{}{}{}Ghahramani, Z. (2015) Probabilistic machine learning and artificial intelligence. Nature 521:452–459. https://www.nature.com/articles/nature14541
+
+\harvarditem{}{}{}Glennon, D., Kiefer, H, and Maycock, T. (2018). Measurement error in residential property valuation: An application of forecast combination. Journal of Housing Economics, 41, 1-29. 
+
+\harvarditem{}{}{}Gilley, O and Pace, R (1990) A Hybrid Cost and Market-Based Estimator for Appraisal. Journal of Real Estate Research. 5(1) pp 75-88. 
+
+\harvarditem{}{}{}Gonzalez, M. and Formoso, C (2006) Mass appraisal with genetic fuzzy rule-based systems. Property Management. 24(1), 20-30. 
+
+\harvarditem{}{}{}Gordon, D. (2005) Metric Matter, Freddie Mac Blog. Available at: http://www.freddiemac.com/hve/pdf/ dougwhitepaper\_metricsmatter.pdf
+
+\harvarditem{}{}{}Hannonen, M (2008) Predicting urban land prices: A comparison of four approaches. International Journal of Strategic Property Management. 12(4) 217-236. 
+
+\harvarditem{}{}{}HouseCanary (2018) HouseCanary Valuation Whitepaper, July 2018, Available at www.housecanary.com
+
+\harvarditem{}{}{}Hu, S., Pezzottii, N., Mavroeidis, D., and Welling, M. (2020) Simple and Accurate Uncertainty Quantification from Bias-Variance Decomposition. arXiv:2002.05582
+
+\harvarditem{}{}{}International Association of Assessing Officials (IAAO). (2017). Standard on Mass Appraisal of Real Property. Kansas City, MO. https://www.iaao.org/media /standards/StandardOnMassAppraisal.pdf
+
+\harvarditem{}{}{}International Association of Assessing Officials (IAAO). (2018). Standard on Automated Valuation Models (AVMs). Kansas City, MO. https://www.iaao.org/media /standards/AVM\_STANDARD\_2018.pdf
+
+\harvarditem{}{}{}International Valuation Standards Council (2020) International Valuation Standards 
+
+\harvarditem{}{}{}International Valuation Standards Council (2013) Valuation Uncertainty. https://www.ivsc.org/files/file/download/id/296
+
+\harvarditem{}{}{}Janssen, C., Soderberg, B., and Zhou, J. (2001). Robust estimation of hedonic models of price and income for investment property. Journal of Property Investment and Finance. 19(4) 342-360. 
+
+\harvarditem{}{}{}Kang, H. and Reichert, A. (1987) An evaluation of alternative estimation techniques and functional forms in developing statistical appraisal models. Journal of Real Estate Research, 2(1), 1-29. 
+
+\harvarditem{}{}{}Kang, H. and Reichert, A. (1991) An emprical analysis of hedonic regression and grid-adjustment techniques in real estate appraisal. Real Estate Economics, 19(1), 70-91. 
+
+\harvarditem{}{}{}Knight, J., Hill, R, and Sirmans, C. (1992) Biased Prediction of Housing Values. Journal of the American Real Estate and Urban Economics Association. 20(3), 427-456. 
+
+\harvarditem{}{}{}Krause, A. (2020) hpiR: An R package for House Price Indexes.  Version 0.3.1.  Accessible at https://cran.r-project.org/web/packages/hpiR/index.html
+
+\harvarditem{}{}{}Kucharska-Stasiak, E. (2013) Uncertainty of Property Valuation as a Subject of Academic Research. Real Estate Management and Valuation, 21(4) 17-25.
+
+\harvarditem{}{}{}Leathart, T and Polaczuk, M  (2020) Temporal Probability Calibration. arXiv: 2002.02644
+
+\harvarditem{}{}{}Lozano-Garcia, N. and Anselin, L (2012) Is the Price Right?  Assessing estimates of cadastral values for Bogota, Columbia. Regional Science Policy and Practice, 4(4), 495-508.
+
+\harvarditem{}{}{}Li, J., Qi, X, and Xiu, D. (2014) Upper and lower bounds for quantity of interest in problems subject to epistemic uncertainty. SIAM Journal of Scientific Computing. 36(2) 364-376.
+
+\harvarditem{}{}{}Lui, X. (2013) Spatial and Temporal Dependence in House Price Prediction. The Journal of Real Estate Finance and Economics. 47(2) 341-369. 
+ 
+\harvarditem{}{}{}Lipscomb, C. (2017) The next generation of AVMs. \textit{Fair and Equitable}, March, 29-32.  
+\harvarditem{}{}{}Mallinson Report (1994), Commercial Property Valuations, Royal Institution of Chartered Surveyors.
+
+\harvarditem{}{}{}Mallinson, M. and French, N. (2000) Uncertainty in property valuation--The nature and relevance of uncertainty and how it might be measured and reported. Journal of Property Investment and Finance. Vol. 18 No. 1, pp. 13-32. https://doi.org/10.1108/14635780010316636
+
+\harvarditem{}{}{}Mayer, M., Bourassa, S., Hoesli, M, and Scognamiglio, D. (2019) Estimation and Updating Methods for Hedonic Valuation. Journal of European Real Estate Research, ...
+
+\harvarditem{}{}{}Meinhausen, N.  (2006) Quantile Regression Forests, Journal of Machine Learning Research, 7, 983-999
+
+\harvarditem{}{}{}Meszek, W. (2013) Property Valuation under Uncertainty: Simulation vs Strategic Model. \textit{International Journal of Strategic Property Management}, 17(1), 79-92. 
+
+\harvarditem{}{}{}Mimis, A., Rovolis, A., and Stamou, M. (2013) Property valuation with artificial neural network: The case of Athens. Journal of Property Research, 30(2), 128-143. 
+
+\harvarditem{}{}{}Mortgage Bankers Association. (2019). The State of Automated Valuation Models in the Age of Big Data. January. pp 1-31. Available at http://www.mba.org/documents/ MBA \_Real\_Estate\_Appraisals\_(0).pdf
+
+\harvarditem{}{}{}Murphy, A., and Winler, R. (1987) A general framework for forecast verification. Monthly Weather Review. 115, 1130-1138.
+
+\harvarditem{}{}{}Nguyen, N. and Cripps, A. (2001) Predicting housing value: A comparison of multiple regression analysis and artificial neural networks. Journal of Real Estate Research, 22(3), 313-
+
+\harvarditem{}{}{}Pace, R. and Gilley, O. (1990) A hybrid cost and marked-based estimator for appraisal, Journal of Real Estate Research, 5(1), 75-88. 
+
+\harvarditem{}{}{}Pace, R., Barry, R., and Gilley, O. (2000) A method for spatial temporal forecasting with an application to real estate.  International Journal of Forecasting, 16, 229-246. 
+
+\harvarditem{}{}{}Paez, A., Long, F., Farber, S. (2008) Moving window approaches for hedonic price estimation: An empirical comparison of modelling techniques. Urban Studies. 45, 1565-1582. 
+
+\harvarditem{}{}{}Pavlov, A. (2000) Space-varying regression coefficients: A Semi-parametric approach applied to real estate markets. Real Estate Economics, 28(2), 249-283
+
+\harvarditem{}{}{}Peterson and Flanagan (2009) Neural Network Hedonic Pricing Models in Mass Real Estate Appraisal. Journal of Real Estate Research,  31(2), 147-164
+
+\harvarditem{}{}{}Reichert and Kang (1987) An evaluation of alternative estimation techniques and functional forms in developing statistical appraisal models. Journal of Real Estate Research, 2(1), 1-29
+
+\harvarditem{}{}{}Royal Institute of Chartered Surveyors (RICS) (2017) RICS Valuation – Global Standards [Red Book]. 
+
+\harvarditem{}{}{}Scher, S. and Messori, G. (2018) Predicting weather forecast uncertainty with machine learning. Quarterly Journal of the Royal Meteorological Society, 144(717), pp 2830-2841.  https://doi.org/10.1002/qj.3410
+
+\harvarditem{}{}{}Shafer, G and Vovk, V. (2008) A Tutorial on Conformal Prediction. Journal of Machine Learning Research, 9, 371-421. 
+
+\harvarditem{}{}{}Shi, D., Guan, J., Zurada, J., Levitan (2015) An innovative clustering approach to market segmentation for improved price prediction. Journal of International Technology and Information Management , 24(1).  
+
+\harvarditem{}{}{}Thibodeau, T. (2003) Marking Single-Family Properties to market. Real Estate Economics. 31(1) 1-22
+
+\harvarditem{}{}{}Valente, J., Wu, S., Gelfand, A., and Sirmans, C. (2005) Apartment Rent Prediction Using Spatial Modeling. Journal of Real Estate Research, 27(1), 105-136. 
+
+\harvarditem{}{}{}Wang, D. and Li, V. (2019) Mass appraisal models of real estate in the 21st century: A systematic literature review.  Sustainability, 11(24), 7006
+
+\harvarditem{}{}{}Wood, G. (2005) Confidence and prediction intervals for generalised linear accident models. Accident Analysis \& Prevention. 37(2), 267-273. 
+
+\harvarditem{}{}{}Wright MN, Ziegler A (2017). “ranger: A Fast Implementation of Random Forests for High Dimensional Data in C++ and R.” Journal of Statistical Software, 77(1), 1–17. doi: 10.18637/jss.v077.i01.
+
+\harvarditem{}{}{}Yacim, J and Boshoff, D. (2018) Impact of Artificial Neural Networks Training Algorithms on Accurate Prediction of Property Values. Journal of Real Estate Research. 
+
+\harvarditem{}{}{}Yakubovskyi, V, Bychkov, O., Dimitrov, G., and Panayotova, G.  (2017) Combined neural network model for real estate market estimation. Proceedings of the Fourth International Conference on AI and Pattern Recognition, Lodz, Poland.  
+
+\harvarditem{}{}{}Yang, B. and Cao, B. (2018) Research on Ensemble Learning-Based Housing Price Prediction Model. Big Geospatial Data and Data Science. 1, 1-8
+
+\harvarditem{}{}{}Zurada, J, Levitan, A, and Guan, J. (2011) A Comparison of Regression and Artificial Intelligence Methods in a Mass Appraisal Context. Journal of Real Estate Research, 33(3), pp 349-387. 
+
+\end{thebibliography}
+
+\pagebreak
+\pagebreak
+
+
+\section{Appendix}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|l|l|r|c|}
+\hline
+\textbf{Authors} & \textbf{Year} & \textbf{Publication} & \textbf{Tests for Calibration}\\
+\hline
+Kang and Reichert & 1987 & Journal of Real Estate Research & No \\
+Pace and Gilley & 1990 & Journal of Real Estate Research & No \\
+Kang and Reichert & 1991 & Real Estate Economics & No \\
+Knight et al & 1992 & Journal of Real Estate Research & No \\
+Pace et al & 2000 & International Journal of Forecasting & No \\
+Pavlov & 2000 & Real Estate Economics & No \\
+Nguyen and Cripps & 2001 & Journal of Real Estate Research & No \\
+Janssen et al & 2001 & Journal of Property Investment and Finance & No \\
+Clapp et al & 2002 & Real Estate Economics & No \\
+Thibodeau & 2003 & Real Estate Economics & No \\
+Clapp & 2003 & Journal of Real Estate Finance and Economics & No \\
+Case et al & 2004 & Journal of Real Estate Finance and Economics & No \\
+Bao and Wan & 2004 & Real Estate Economics & No \\
+Bin & 2004 & Journal of Housing Economics & No \\
+Valente et al & 2005 & Journal of Real Estate Research & No \\
+Gonzalez and Mormoso & 2006 & Property Management & No \\
+Bourassa et al & 2007 & Journal of Real Estate Finance and Economics & No \\
+Bao and Wan & 2007 & Journal of Real Estate Research & No \\
+Chica-Olmo & 2007 & Journal of Real Estate Research & No \\
+Hannonen & 2008 & Int'l Journal of Strategic Property Management & No \\
+Paez et al & 2008 & Urban Studies & No \\
+Bourassa et al & 2010 & Journal of Real Estate Research & No \\
+Peterson and Flanagan & 2009 & Journal of Real Estate Research & No \\
+Acciani et al & 2011 & AESTIMUM & No \\
+Zurada et al & 2011 & Journal of Real Estate Research & No \\
+Antipov and Pokryshevska & 2012 & Expert Systems with Applications & No \\
+Lozano-Garcia and Anselin & 2012 & Regional Science Policy and Practice & No \\
+Mimis et al & 2013 & Journal of Property Research & No \\
+Liu & 2013 & Journal of Real Estate Finance and Economics & No \\
+Bidanset et al & 2014 & Cityscape & No \\
+Shi et al & 2015 & Journal of Int'l Tech. and Information Management & No \\
+Feng and Jones & 2015 & IEEE Conference on Spatial Data Mininge & No \\
+Demetriou & 2017 & Environment and Planning B & No \\
+Cheung & 2017 & International Real Estate Review & No \\
+Yakubovskyi et al & 2017 & 4th International Conference on AI and Pattern Recognition & No \\
+Chen et al & 2017 & International Journal of Strategic Property Management & No \\
+Glennon et al  & 2018 & Journal of Housing Economics & No \\
+Yang and Cao & 2018 & Big Geospatial Data and Data Science & No \\
+Yacim and Boshoff & 2018 & Journal of Real Estate Research & No \\
+Gao et al & 2019 & arXiv & No \\
+Mayer et al & 2019 & Journal of European Real Estate Research & No \\
+\hline
+\end{tabular}
+\caption{Summary of Empirical Papers Reviewed)}
+\label{table:A1}
+\end{table}
+
+\end{document}
