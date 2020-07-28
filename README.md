@@ -50,7 +50,17 @@ Open this project in RStudio. Note that you can reproduce without the RStudio ID
 
 &nbsp; 
 
-3. Finally, run (or knit) **3_create_tables_figures.rmd** to generate the tables and figures in the paper. 
+3. Then, run (or knit) **3_create_tables_figures.rmd** to generate the tables and figures in the paper. 
+
+&nbsp; 
+
+4. Finally, run **4_create_map.R** to generate the sale location map.
+
+&nbsp; 
+
+#### Docker Version
+
+Additionally, there is a Dockerfile in the /docker directory that will allow you to perfectly reproduce this work with a Docker Image.  
 
 &nbsp; 
 
