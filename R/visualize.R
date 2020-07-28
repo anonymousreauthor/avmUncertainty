@@ -71,7 +71,7 @@ plotCalib <- function(cal_obj,
 #' @export
 
 plotEffic <- function(cal_obj,
-                      title_prefix = 'Calibration',
+                      title_prefix = 'Interval Efficiency',
                       xaxis_gap = .1,
                       yaxis_gap = .1){
 
